@@ -6,3 +6,6 @@ We(Me and @ErwinRussel) tried to reproduce the W-Net paper, as part of the CS424
 We wrote about our reproduction progress which can be read here: https://aswali.github.io/WNet/
 
 The loss functions implemented are our own.
+
+
+Use npz file format
