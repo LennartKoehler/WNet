@@ -16,6 +16,7 @@ from torchvision import datasets, transforms
 from utils.org_soft_n_cut_loss import batch_soft_n_cut_loss
 from utils.soft_n_cut_loss import soft_n_cut_loss
 
+from data import ReadDataset
 import WNet
 import matplotlib.pyplot as plt
 
@@ -34,6 +35,9 @@ parser.add_argument('--input_folder', metavar='f', default=None, type=str,
                     help='Folder of input images')
 parser.add_argument('--output_folder', metavar='of', default=None, type=str, 
                     help='folder of output images')
+
+
+
 
 softmax = nn.Softmax2d()
 criterionIdt = torch.nn.MSELoss()
@@ -71,7 +75,7 @@ def show_image(image):
 
 def main():
     # Load the arguments
-    args, unknown = parser.parse_known_args()
+    # args, unknown = parser.parse_known_args()
 
     # Check if CUDA is available
     CUDA = torch.cuda.is_available()
@@ -81,24 +85,31 @@ def main():
     rec_losses_avg = []
 
     # Squeeze k
-    k = args.squeeze
-    img_size = (224, 224)
-    wnet = WNet.WNet(k)
+    # squeeze = args.squeeze
+    squeeze = 1000
+    img_size = (300, 224)
+    wnet = WNet.WNet(squeeze, in_chans=1)
     if(CUDA):
         wnet = wnet.cuda()
     learning_rate = 0.003
     optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
 
-    transform = transforms.Compose([transforms.Resize(img_size),
-                                transforms.ToTensor()])
 
-    dataset = datasets.ImageFolder(args.input_folder, transform=transform)
+    # transform = transforms.Compose([transforms.Resize(img_size),
+    #                             transforms.ToTensor()])
 
-    # Train 1 image set batch size=1 and set shuffle to False
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=True)
+    # dataset = datasets.ImageFolder(args.input_folder, transform=transform)
+
+    # # Train 1 image set batch size=1 and set shuffle to False
+    # dataloader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=True)
+
+    dataset = ReadDataset("data_segments.h5")
+
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=2, shuffle=True)
 
     # Run for every epoch
-    for epoch in range(args.epochs):
+    # for epoch in range(args.epochs):
+    for epoch in range(10):
 
         # At 1000 epochs divide SGD learning rate by 10
         if (epoch > 0 and epoch % 1000 == 0):
@@ -121,7 +132,7 @@ def main():
             if CUDA:
                 batch[0] = batch[0].cuda()
             
-            wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, batch[0], k, img_size)
+            wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, batch[0], 1, img_size) # does this only train with first image of batch?
 
             n_cut_losses.append(n_cut_loss.detach())
             rec_losses.append(rec_loss.detach())
@@ -139,9 +150,9 @@ def main():
 
     enc, dec = wnet(images)
 
-    torch.save(wnet.state_dict(), "model_" + args.name)
-    np.save("n_cut_losses_" + args.name, n_cut_losses_avg)
-    np.save("rec_losses_" + args.name, rec_losses_avg)
+    torch.save(wnet.state_dict(), "model_" + "test")
+    np.save("n_cut_losses_" + "test", n_cut_losses_avg)
+    np.save("rec_losses_" + "test", rec_losses_avg)
     print("Done")
 
 if __name__ == '__main__':

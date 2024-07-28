@@ -9,6 +9,7 @@ Implementation of the W-Net unsupervised image segmentation architecture
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 class Block(nn.Module):
     def __init__(self, in_filters, out_filters, seperable=True):
@@ -16,29 +17,29 @@ class Block(nn.Module):
         
         if seperable:
             
-            self.spatial1=nn.conv1d(in_filters, in_filters, kernel_size=3, groups=in_filters, padding=1)
-            self.depth1=nn.conv1d(in_filters, out_filters, kernel_size=1)
+            self.spatial1=nn.Conv1d(in_filters, in_filters, kernel_size=3, groups=in_filters, padding=1)
+            self.depth1=nn.Conv1d(in_filters, out_filters, kernel_size=1)
             
             self.conv1=lambda x: self.depth1(self.spatial1(x))
             
-            self.spatial2=nn.conv1d(out_filters, out_filters, kernel_size=3, padding=1, groups=out_filters)
-            self.depth2=nn.conv1d(out_filters, out_filters, kernel_size=1)
+            self.spatial2=nn.Conv1d(out_filters, out_filters, kernel_size=3, padding=1, groups=out_filters)
+            self.depth2=nn.Conv1d(out_filters, out_filters, kernel_size=1)
             
             self.conv2=lambda x: self.depth2(self.spatial2(x))
             
         else:
             
-            self.conv1=nn.conv1d(in_filters, out_filters, kernel_size=3, padding=1)
-            self.conv2=nn.conv1d(out_filters, out_filters, kernel_size=3, padding=1)
+            self.conv1=nn.Conv1d(in_filters, out_filters, kernel_size=3, padding=1)
+            self.conv2=nn.Conv1d(out_filters, out_filters, kernel_size=3, padding=1)
         
         
         self.relu1 = nn.ReLU()
         self.dropout1 = nn.Dropout(0.65) 
-        self.batchnorm1=nn.BatchNorm2d(out_filters)
+        self.batchnorm1=nn.BatchNorm1d(out_filters)
         
         self.relu2 = nn.ReLU()
         self.dropout2 = nn.Dropout(0.65) 
-        self.batchnorm2=nn.BatchNorm2d(out_filters)
+        self.batchnorm2=nn.BatchNorm1d(out_filters)
 
     def forward(self, x):
         x = self.batchnorm1(self.conv1(x)).clamp(0)
@@ -70,21 +71,21 @@ class UEnc(nn.Module):
         self.up4=nn.ConvTranspose1d(2*ch_mul, ch_mul, kernel_size=3, stride=2, padding=1, output_padding=1)
         self.dec4=Block(2*ch_mul, ch_mul, seperable=False)
         
-        self.final=nn.conv1d(ch_mul, squeeze, kernel_size=(1, 1))
-        self.softmax = nn.Softmax2d()
+        self.final=nn.Conv1d(ch_mul, squeeze, kernel_size=(1, 1))
+        self.softmax = nn.Softmax()
         
     def forward(self, x):
         
         enc1=self.enc1(x)
         
-        enc2=self.enc2(F.max_pool2d(enc1, (2, 2)))
+        enc2=self.enc2(F.max_pool1d(enc1, (2, 2)))
         
-        enc3=self.enc3(F.max_pool2d(enc2, (2,2)))
+        enc3=self.enc3(F.max_pool1d(enc2, (2,2)))
         
-        enc4=self.enc4(F.max_pool2d(enc3, (2,2)))
+        enc4=self.enc4(F.max_pool1d(enc3, (2,2)))
         
         
-        middle=self.middle(F.max_pool2d(enc4, (2,2)))
+        middle=self.middle(F.max_pool1d(enc4, (2,2)))
         
         
         up1=torch.cat([enc4, self.up1(middle)], 1)
@@ -124,20 +125,20 @@ class UDec(nn.Module):
         self.up4=nn.ConvTranspose1d(2*ch_mul, ch_mul, kernel_size=3, stride=2, padding=1, output_padding=1)
         self.dec4=Block(2*ch_mul, ch_mul, seperable=False)
         
-        self.final=nn.conv1d(ch_mul, in_chans, kernel_size=(1, 1))
+        self.final=nn.Conv1d(ch_mul, in_chans, kernel_size=(1, 1))
         
     def forward(self, x):
         
         enc1 = self.enc1(x)
         
-        enc2 = self.enc2(F.max_pool2d(enc1, (2, 2)))
+        enc2 = self.enc2(F.max_pool1d(enc1, (2, 2)))
         
-        enc3 = self.enc3(F.max_pool2d(enc2, (2,2)))
+        enc3 = self.enc3(F.max_pool1d(enc2, (2,2)))
         
-        enc4 = self.enc4(F.max_pool2d(enc3, (2,2)))
+        enc4 = self.enc4(F.max_pool1d(enc3, (2,2)))
         
         
-        middle = self.middle(F.max_pool2d(enc4, (2,2)))
+        middle = self.middle(F.max_pool1d(enc4, (2,2)))
         
         
         up1 = torch.cat([enc4, self.up1(middle)], 1)
@@ -158,7 +159,7 @@ class UDec(nn.Module):
         return final
 
 class WNet(nn.Module):
-    def __init__(self, squeeze, ch_mul=64, in_chans=3, out_chans=1000):
+    def __init__(self, squeeze, ch_mul=64, in_chans=1, out_chans=1000):
         super(WNet, self).__init__()
         if out_chans==1000:
             out_chans=in_chans
@@ -181,3 +182,9 @@ class WNet(nn.Module):
         
         else:
             raise ValueError('Invalid returns, returns must be in [enc dec both]')
+        
+if __name__ == "__main__":
+    model = WNet(120)
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    params = sum([np.prod(p.size()) for p in model_parameters])
+    print("Number of trainable parameters: ", params)

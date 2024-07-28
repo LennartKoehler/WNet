@@ -9,11 +9,12 @@ from torch.nn.modules.utils import _pair, _quadruple
 
 def calculate_weights(input, batch_size, img_size=(64, 64), ox=4, radius=5 ,oi=10):
     channels = 1
-    image = torch.mean(input, dim=1, keepdim=True)
+    image = torch.mean(input, dim=1, keepdim=True) # 
+    assert False
     h, w = img_size
     p = radius
 
-    image = F.pad(input=image, pad=(p, p, p, p), mode='constant', value=0)
+    image = F.pad(input=image, pad=(p, p, p, p), mode='constant', value=0) # pad around image to not reduce size
     # Use this to generate random values for the padding.
     # randomized_inputs = (0 - 255) * torch.rand(image.shape).cuda() + 255
     # mask = image.eq(0)
@@ -37,14 +38,14 @@ def calculate_weights(input, batch_size, img_size=(64, 64), ox=4, radius=5 ,oi=1
     if torch.cuda.is_available():
         k_row = k_row.cuda()
 
-    distance_weights = (k_row ** 2 + k_row.T**2)
+    distance_weights = (k_row ** 2 + k_row.T**2) # || X(i) - X (j) ||_2
 
-    mask = distance_weights.le(radius)
-    distance_weights = torch.exp(torch.div(-1*(distance_weights), ox**2))
-    distance_weights = torch.mul(mask, distance_weights)
+    mask = distance_weights.le(radius) # distance weights less than radius 
+    distance_weights = torch.exp(torch.div(-1*(distance_weights), ox**2)) # exp(-||X(i)-X(j)||^2_2  /  sigma^2_X)
+    distance_weights = torch.mul(mask, distance_weights) # weights where distance > r are set to 0
 
 
-    patches = torch.exp(torch.div(-1*((patches - center_values)**2), oi**2))
+    patches = torch.exp(torch.div(-1*((patches - center_values)**2), oi**2)) # exp(-||F(i)-F(j)||^2_2  /  sigma^2_I)
     return torch.mul(patches, distance_weights)
 
 def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
