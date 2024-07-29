@@ -7,13 +7,11 @@ import torch.nn.functional as F
 import numpy as np
 from torch.nn.modules.utils import _pair, _quadruple
 
-def calculate_weights(input, batch_size, img_size=256, ox=4, radius=5 ,oi=10):
+def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=10):
     channels = 1
-    image = torch.mean(input, dim=1, keepdim=True) # 
-    l = img_size
-    p = radius
+    image = torch.mean(batch, dim=1, keepdim=True) # mean over channels which is 1? -> does nothing?
 
-    image = F.pad(input=image, pad=(p, p), mode='constant', value=0) # pad around image to not reduce size
+    image = F.pad(input=image, pad=(radius, radius), mode='constant', value=0) # pad around image to not reduce size
     # Use this to generate random values for the padding.
     # randomized_inputs = (0 - 255) * torch.rand(image.shape).cuda() + 255
     # mask = image.eq(0)
@@ -23,8 +21,17 @@ def calculate_weights(input, batch_size, img_size=256, ox=4, radius=5 ,oi=10):
     # dh, dw = 1, 1
     kh = radius*2 + 1
     dh = 1
-    patches = image.unfold(2, kh, dh) # sliding window over dimension 2, with size kh and step dh written into new dimension
 
+
+    distances = torch.abs(torch.arange(1, kh + 1) - radius - 1)
+    # distances: tensor([5, 4, 3, 2, 1, 0, 1, 2, 3, 4, 5])
+    distance_weights = torch.exp(torch.div(-1*(distances), ox**2)) # exp(-||X(i)-X(j)||^2_2  /  sigma^2_X)
+    if torch.cuda.is_available():
+        distance_weights = distance_weights.cuda()
+    # distance_weights: tensor([0.7316, 0.7788, 0.8290, 0.8825, 0.9394, 1.0000, 0.9394, 0.8825, 0.8290, 0.7788, 0.7316])
+
+
+    patches = image.unfold(2, kh, dh) # sliding window over dimension 2, with size kh and step dh written into new dimension
     patches = patches.contiguous().view(batch_size, channels, -1, kh)
     patches = patches.permute(0, 2, 1, 3)
     patches = patches.view(-1, channels, kh)
@@ -43,23 +50,14 @@ def calculate_weights(input, batch_size, img_size=256, ox=4, radius=5 ,oi=10):
     # [4,4,4,4,4]
     # [5,5,5,5,5]
 
-    k_row = torch.arange(1, kh + 1) - radius - 1
-
-    if torch.cuda.is_available():
-        k_row = k_row.cuda()
-
-    distance_weights = (k_row ** 2 + k_row.T**2) # not sure if this needs to be squared
-
-    mask = distance_weights.le(radius) # distance weights less than radius, is this even necessary?
-    distance_weights = torch.exp(torch.div(-1*(distance_weights), ox**2)) # exp(-||X(i)-X(j)||^2_2  /  sigma^2_X)
-    distance_weights = torch.mul(mask, distance_weights) # weights where distance > r are set to 0
-
 
     patches = torch.exp(torch.div(-1*((patches - center_values)**2), oi**2)) # exp(-||F(i)-F(j)||^2_2  /  sigma^2_I)
     # patches - center_values: distance of each pixel value to its center pixel value
     # e.g.
     # [-2,-1,0,1,2]
     # [-2,-1,0,1,2]
+    print(patches)
+    print(distance_weights)
 
     return torch.mul(patches, distance_weights)
 
@@ -84,11 +82,11 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
 
     return torch.div(nominator, denominator)
 
-def soft_n_cut_loss(image, enc, img_size):
+def soft_n_cut_loss(batch, enc, img_size):
     loss = []
-    batch_size = image.shape[0]
+    batch_size = batch.shape[0]
     k = enc.shape[1]
-    weights = calculate_weights(image, batch_size, img_size)
+    weights = calculate_weights(batch, batch_size, img_size)
     for i in range(0, k):
         loss.append(soft_n_cut_loss_single_k(weights, enc[:, (i,), :, :], batch_size, img_size))
     da = torch.stack(loss)
