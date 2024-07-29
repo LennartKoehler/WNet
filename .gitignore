@@ -3,4 +3,5 @@ data2
 utils/*/
 venv
 data/*
+data_segments.h5
 

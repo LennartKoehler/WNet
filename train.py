@@ -87,7 +87,7 @@ def main():
     # Squeeze k
     # squeeze = args.squeeze
     squeeze = 1000
-    img_size = (300, 224)
+    img_size = 256
     wnet = WNet.WNet(squeeze, in_chans=1)
     if(CUDA):
         wnet = wnet.cuda()
@@ -105,7 +105,7 @@ def main():
 
     dataset = ReadDataset("data_segments.h5")
 
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=2, shuffle=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True)
 
     # Run for every epoch
     # for epoch in range(args.epochs):
@@ -130,9 +130,9 @@ def main():
 
             # Train Wnet with CUDA if available
             if CUDA:
-                batch[0] = batch[0].cuda()
-            
-            wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, batch[0], 1, img_size) # does this only train with first image of batch?
+                batch = batch.cuda()
+            print(batch.size())
+            wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, batch, 1, img_size)
 
             n_cut_losses.append(n_cut_loss.detach())
             rec_losses.append(rec_loss.detach())

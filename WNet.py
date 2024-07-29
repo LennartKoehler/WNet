@@ -52,7 +52,7 @@ class Block(nn.Module):
         return x
 
 class UEnc(nn.Module):
-    def __init__(self, squeeze, ch_mul=64, in_chans=3):
+    def __init__(self, squeeze, ch_mul=64, in_chans=1):
         super(UEnc, self).__init__()
         
         self.enc1=Block(in_chans, ch_mul, seperable=False)
@@ -62,33 +62,33 @@ class UEnc(nn.Module):
         
         self.middle=Block(8*ch_mul, 16*ch_mul)
         
-        self.up1=nn.ConvTranspose1d(16*ch_mul, 8*ch_mul, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.up1=nn.ConvTranspose1d(16*ch_mul, 8*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
         self.dec1=Block(16*ch_mul, 8*ch_mul)
-        self.up2=nn.ConvTranspose1d(8*ch_mul, 4*ch_mul, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.up2=nn.ConvTranspose1d(8*ch_mul, 4*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
         self.dec2=Block(8*ch_mul, 4*ch_mul)
-        self.up3=nn.ConvTranspose1d(4*ch_mul, 2*ch_mul, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.up3=nn.ConvTranspose1d(4*ch_mul, 2*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
         self.dec3=Block(4*ch_mul, 2*ch_mul)
-        self.up4=nn.ConvTranspose1d(2*ch_mul, ch_mul, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.up4=nn.ConvTranspose1d(2*ch_mul, ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
         self.dec4=Block(2*ch_mul, ch_mul, seperable=False)
         
-        self.final=nn.Conv1d(ch_mul, squeeze, kernel_size=(1, 1))
+        self.final=nn.Conv1d(ch_mul, squeeze, kernel_size=1)
         self.softmax = nn.Softmax()
         
     def forward(self, x):
         
         enc1=self.enc1(x)
         
-        enc2=self.enc2(F.max_pool1d(enc1, (2, 2)))
+        enc2=self.enc2(F.max_pool1d(enc1, (4)))
         
-        enc3=self.enc3(F.max_pool1d(enc2, (2,2)))
+        enc3=self.enc3(F.max_pool1d(enc2, (4)))
         
-        enc4=self.enc4(F.max_pool1d(enc3, (2,2)))
-        
-        
-        middle=self.middle(F.max_pool1d(enc4, (2,2)))
+        enc4=self.enc4(F.max_pool1d(enc3, (4)))
         
         
-        up1=torch.cat([enc4, self.up1(middle)], 1)
+        middle=self.middle(F.max_pool1d(enc4, (4)))
+        
+        m2 = self.up1(middle)
+        up1=torch.cat([enc4, m2], 1)
         dec1=self.dec1(up1)
         
         up2=torch.cat([enc3, self.up2(dec1)], 1)
@@ -106,7 +106,7 @@ class UEnc(nn.Module):
         return final
 
 class UDec(nn.Module):
-    def __init__(self, squeeze, ch_mul=64, in_chans=3):
+    def __init__(self, squeeze, ch_mul=64, in_chans=1):
         super(UDec, self).__init__()
         
         self.enc1=Block(squeeze, ch_mul, seperable=False)
@@ -131,14 +131,14 @@ class UDec(nn.Module):
         
         enc1 = self.enc1(x)
         
-        enc2 = self.enc2(F.max_pool1d(enc1, (2, 2)))
+        enc2 = self.enc2(F.max_pool1d(enc1, (4)))
         
-        enc3 = self.enc3(F.max_pool1d(enc2, (2,2)))
+        enc3 = self.enc3(F.max_pool1d(enc2, (4)))
         
-        enc4 = self.enc4(F.max_pool1d(enc3, (2,2)))
+        enc4 = self.enc4(F.max_pool1d(enc3, (4)))
         
         
-        middle = self.middle(F.max_pool1d(enc4, (2,2)))
+        middle = self.middle(F.max_pool1d(enc4, (4)))
         
         
         up1 = torch.cat([enc4, self.up1(middle)], 1)

@@ -101,13 +101,13 @@ class ReadDataset(Dataset):
         return len(self.segment_names)
     
     def __getitem__(self, idx):
-        return torch.from_numpy(self.h5_file[self.segment_names[idx]][:]).float()
+        return torch.from_numpy(self.h5_file[self.segment_names[idx]][:]).float().unsqueeze(0) # unsqueeze: add channel axis
     
 
     
 
 if __name__ == "__main__":
-    # write_data_file("/home/lennart/Projektmodul/ecoli/tombo/fast5_files_gzip",300,20,"data_segments.h5")
+    write_data_file("/home/lennart/Projektmodul/ecoli/tombo/fast5_files_gzip",256,20,"data_segments.h5")
 
     data = ReadDataset("data_segments.h5")
     print(data[0])
