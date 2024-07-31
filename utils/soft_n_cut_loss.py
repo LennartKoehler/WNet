@@ -56,29 +56,28 @@ def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=10):
     # e.g.
     # [-2,-1,0,1,2]
     # [-2,-1,0,1,2]
-    print(patches)
-    print(distance_weights)
+
 
     return torch.mul(patches, distance_weights)
 
 def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
     channels = 1
-    h, w = img_size
-    p = radius
-
     kh, kw = radius*2 + 1, radius*2 + 1
     dh, dw = 1, 1
-    encoding = F.pad(input=enc, pad=(p, p, p, p), mode='constant', value=0)
+    encoding = F.pad(input=enc, pad=(radius, radius), mode='constant', value=0)
 
-    seg = encoding.unfold(2, kh, dh).unfold(3, kw, dw)
-    seg = seg.contiguous().view(batch_size, channels, -1, kh, kw)
-    seg = seg.permute(0, 2, 1, 3, 4)
-    seg = seg.view(-1, channels, kh, kw)
+    seg = encoding.unfold(2, kh, dh)
+    seg = seg.contiguous().view(batch_size, channels, -1, kh) # does this do anything?
+    seg = seg.permute(0, 2, 1, 3)
+    seg = seg.view(-1, channels, kh) # first dimension becomes batches x values (e.g. 4 x 256)
+    
+    # seg = p(v=A_k)
+    # enc = p(u=A_k)
 
     nom = weights * seg
 
-    nominator = torch.sum(enc * torch.sum(nom, dim=(1,2,3)).reshape(batch_size, h, w), dim=(1,2,3))
-    denominator = torch.sum(enc * torch.sum(weights, dim=(1,2,3)).reshape(batch_size, h, w), dim=(1,2,3))
+    nominator = torch.sum(enc * torch.sum(nom, dim=(1,2)).reshape(batch_size, img_size), dim=(1,2))
+    denominator = torch.sum(enc * torch.sum(weights, dim=(1,2)).reshape(batch_size, img_size), dim=(1,2))
 
     return torch.div(nominator, denominator)
 
@@ -88,6 +87,6 @@ def soft_n_cut_loss(batch, enc, img_size):
     k = enc.shape[1]
     weights = calculate_weights(batch, batch_size, img_size)
     for i in range(0, k):
-        loss.append(soft_n_cut_loss_single_k(weights, enc[:, (i,), :, :], batch_size, img_size))
+        loss.append(soft_n_cut_loss_single_k(weights, enc[:, (i,), :], batch_size, img_size))
     da = torch.stack(loss)
     return torch.mean(k - torch.sum(da, dim=0))

@@ -45,10 +45,13 @@ criterionIdt = torch.nn.MSELoss()
 def train_op(model, optimizer, input, k, img_size, psi=0.5):
     enc = model(input, returns='enc')
     d = enc.clone().detach()
-    n_cut_loss=soft_n_cut_loss(input,  softmax(enc),  img_size)
-    n_cut_loss.backward()
-    optimizer.step()
-    optimizer.zero_grad()
+    # n_cut_loss=soft_n_cut_loss(input,  softmax(enc),  img_size)
+    # n_cut_loss.backward()
+    # optimizer.step()
+    # optimizer.zero_grad()
+    
+    # IMPORTANT: Both enc and dec get trained with reconstruction loss, not only decoder
+    # -> input to decoder should be output of enc not input (which is original image)
 
     dec = model(input, returns='dec')
     rec_loss=reconstruction_loss(input, dec)
@@ -131,9 +134,8 @@ def main():
             # Train Wnet with CUDA if available
             if CUDA:
                 batch = batch.cuda()
-            print(batch.size())
             wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, batch, 1, img_size)
-
+            print(n_cut_loss, rec_loss)
             n_cut_losses.append(n_cut_loss.detach())
             rec_losses.append(rec_loss.detach())
 

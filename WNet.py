@@ -116,16 +116,16 @@ class UDec(nn.Module):
         
         self.middle=Block(8*ch_mul, 16*ch_mul)
         
-        self.up1=nn.ConvTranspose1d(16*ch_mul, 8*ch_mul, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.up1=nn.ConvTranspose1d(16*ch_mul, 8*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
         self.dec1=Block(16*ch_mul, 8*ch_mul)
-        self.up2=nn.ConvTranspose1d(8*ch_mul, 4*ch_mul, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.up2=nn.ConvTranspose1d(8*ch_mul, 4*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
         self.dec2=Block(8*ch_mul, 4*ch_mul)
-        self.up3=nn.ConvTranspose1d(4*ch_mul, 2*ch_mul, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.up3=nn.ConvTranspose1d(4*ch_mul, 2*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
         self.dec3=Block(4*ch_mul, 2*ch_mul)
-        self.up4=nn.ConvTranspose1d(2*ch_mul, ch_mul, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.up4=nn.ConvTranspose1d(2*ch_mul, ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
         self.dec4=Block(2*ch_mul, ch_mul, seperable=False)
         
-        self.final=nn.Conv1d(ch_mul, in_chans, kernel_size=(1, 1))
+        self.final=nn.Conv1d(ch_mul, in_chans, kernel_size=1)
         
     def forward(self, x):
         
