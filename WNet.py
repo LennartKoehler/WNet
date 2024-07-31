@@ -166,7 +166,12 @@ class WNet(nn.Module):
         self.UEnc=UEnc(squeeze, ch_mul, in_chans)
         self.UDec=UDec(squeeze, ch_mul, out_chans)
     def forward(self, x, returns='both'):
-        
+         # doesnt this mean that it first runs the encoder part and then runs the encoder+decoder
+         # couldn't the encoder be run, then ncutloss, then calculate the decoder with the input of the encoder and then run the reconstruction loss?
+         # or would it be problematic if the decoder is run with the output of the encoder of one iteration before
+         # currently, how train_op is set up:
+         #1. run encoder and calc ncutloss and backpropegate
+         #2. run encoder and decoder and then calc reconstruction loss and backpropegate
         enc = self.UEnc(x)
         
         if returns=='enc':

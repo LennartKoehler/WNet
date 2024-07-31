@@ -38,24 +38,27 @@ parser.add_argument('--output_folder', metavar='of', default=None, type=str,
 
 
 
-
-softmax = nn.Softmax2d()
+softmax = nn.Softmax(dim=1) # is this the right dimension? -> should be the dimension of channels (classes) where each pixel hast a probability for each class
 criterionIdt = torch.nn.MSELoss()
 
-def train_op(model, optimizer, input, k, img_size, psi=0.5):
+def train_op(model, optimizer, input, k, img_size, psi=0.5): # model = WNet
     enc = model(input, returns='enc')
     d = enc.clone().detach()
     n_cut_loss=soft_n_cut_loss(input,  softmax(enc),  img_size)
     n_cut_loss.backward()
     optimizer.step()
     optimizer.zero_grad()
-    
-    
-    # IMPORTANT: Both enc and dec get trained with reconstruction loss, not only decoder
-    # -> input to decoder should be output of enc not input (which is original image)
+
 
     dec = model(input, returns='dec')
     rec_loss=reconstruction_loss(input, dec)
+    rec_loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+
+
+    # dec = model(input, returns='dec')
+    # rec_loss=reconstruction_loss(input, dec)
     # rec_loss.backward()
     # optimizer.step()
     # optimizer.zero_grad()
@@ -109,7 +112,7 @@ def main():
 
     dataset = ReadDataset("data_segments.h5")
 
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=True)
 
     # Run for every epoch
     # for epoch in range(args.epochs):
@@ -136,9 +139,12 @@ def main():
             if CUDA:
                 batch = batch.cuda()
             wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, batch, 1, img_size)
-            print(n_cut_loss, rec_loss)
             n_cut_losses.append(n_cut_loss.detach())
             rec_losses.append(rec_loss.detach())
+            if idx%50==0:
+                print(n_cut_loss.item(), rec_loss.item())
+
+
 
         n_cut_losses_avg.append(torch.mean(torch.FloatTensor(n_cut_losses)))
         rec_losses_avg.append(torch.mean(torch.FloatTensor(rec_losses)))

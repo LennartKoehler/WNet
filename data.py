@@ -72,7 +72,7 @@ def get_data_metadata(root_dir, segment_length, segment_overlap, save = False, o
 def write_data_file(root_dir, segment_length, segment_overlap, out_file):
     h5_file = h5py.File(out_file, "w")
 
-    for file_name in os.listdir(root_dir):
+    for file_name in os.listdir(root_dir)[:50]:
         try:
             file = os.path.join(root_dir, file_name)
             read = ReadData(file)
@@ -107,7 +107,7 @@ class ReadDataset(Dataset):
     
 
 if __name__ == "__main__":
-    write_data_file("/home/lennart/Projektmodul/ecoli/tombo/fast5_files_gzip",256,20,"data_segments.h5")
+    write_data_file("/home/lennart/Projektmodul/ecoli/tombo/fast5_files_gzip",256,20,"data_segments_reduced.h5")
 
     data = ReadDataset("data_segments.h5")
     print(data[0])
