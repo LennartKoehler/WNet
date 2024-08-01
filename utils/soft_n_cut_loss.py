@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from torch.nn.modules.utils import _pair, _quadruple
+import matplotlib.pyplot as plt
 
 def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=10):
     channels = 1
@@ -32,7 +33,7 @@ def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=10):
 
 
     patches = image.unfold(2, kh, dh) # sliding window over dimension 2, with size kh and step dh written into new dimension
-    patches = patches.contiguous().view(batch_size, channels, -1, kh)
+    # patches = patches.contiguous().view(batch_size, channels, -1, kh)
     patches = patches.permute(0, 2, 1, 3)
     patches = patches.view(-1, channels, kh) # remove batch dimension by concatenating all batches
     # patches: sliding window of size kh at each point written into new dimension
@@ -84,7 +85,7 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
     encoding = F.pad(input=enc, pad=(radius, radius), mode='constant', value=0)
 
     seg = encoding.unfold(2, kh, dh)
-    seg = seg.contiguous().view(batch_size, channels, -1, kh) # does this do anything?
+    # seg = seg.contiguous().view(batch_size, channels, -1, kh) # does this do anything?
     seg = seg.permute(0, 2, 1, 3)
     seg = seg.view(-1, channels, kh) # first dimension becomes batches x values (e.g. 4 x 256)
     # seg now has the same shape as weights, but the values of seg are the encoded image for one class
@@ -95,7 +96,7 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
     # enc = p(u=A_k)
 
     nom = weights * seg
-
+    plt.plot(seg[4,0,:], label="segmentation")
     # nom: "for each pixel, compare class prediction to weights"
     # if two neighboring pixels recieved a "one" for this class and in the original image they also have the same value
     # then nom for this pixel is high. Therefore the nominator is high and therefore the return of this function is high
@@ -108,19 +109,30 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
 
     return torch.div(nominator, denominator)
 
-# def test2():
-#     original = torch.tensor([[[1.0, 1.0 , 2.0, 50.0, 50.0]]])
-#     enc = torch.tensor([[[1.0, 1.0, 1.0, 0.0, 0.0]]])
-#     print(soft_n_cut_loss_single_k(calculate_weights(original, 1, 5, radius=1), enc, 1, 5, radius=1))
 
-# test2()
 
 def soft_n_cut_loss(batch, enc, img_size):
     loss = []
     batch_size = batch.shape[0]
     k = enc.shape[1]
     weights = calculate_weights(batch, batch_size, img_size)
+    plt.plot(weights[4,0,:], label="weights")
     for i in range(0, k):
         loss.append(soft_n_cut_loss_single_k(weights, enc[:, (i,), :], batch_size, img_size))
+        plt.legend()
+        plt.show()
+
     da = torch.stack(loss)
     return torch.mean(k - torch.sum(da, dim=0))
+
+
+def test2():
+    original = torch.tensor([[[255.0,255.0,255.0,255.0,255.0,0.0,0.0,0.0,0.0,0.0]]]).float()
+    #plt.plot(original[0,0,:], label="original image")
+    channel1 = torch.tensor([[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]]]).float()
+    enc = torch.nn.Softmax(dim=1)(torch.cat((channel1, 1-channel1), dim = 1))
+    plt.plot(enc[0,0,:], label="raw class")
+    plt.plot(enc[0,1,:], label="raw class")
+    print(soft_n_cut_loss(original, enc, 10))
+
+test2()

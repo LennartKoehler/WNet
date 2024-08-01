@@ -50,12 +50,12 @@ def train_op(model, optimizer, input, k, img_size, psi=0.5): # model = WNet
     optimizer.zero_grad()
 
 
-    dec = model(input, returns='dec')
-    rec_loss=reconstruction_loss(input, dec)
-    rec_loss.backward()
-    optimizer.step()
-    optimizer.zero_grad()
-
+    # dec = model(input, returns='dec')
+    # rec_loss=reconstruction_loss(input, dec)
+    # rec_loss.backward()
+    # optimizer.step()
+    # optimizer.zero_grad()
+    rec_loss = torch.tensor(1)
 
     # dec = model(input, returns='dec')
     # rec_loss=reconstruction_loss(input, dec)
@@ -110,7 +110,7 @@ def main():
     # # Train 1 image set batch size=1 and set shuffle to False
     # dataloader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=True)
 
-    dataset = ReadDataset("data_segments.h5")
+    dataset = ReadDataset("data_segments_reduced.h5")
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=True)
 
@@ -141,7 +141,7 @@ def main():
             wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, batch, 1, img_size)
             n_cut_losses.append(n_cut_loss.detach())
             rec_losses.append(rec_loss.detach())
-            if idx%50==0:
+            if idx%10==0:
                 print(n_cut_loss.item(), rec_loss.item())
 
 
