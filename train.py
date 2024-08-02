@@ -80,6 +80,51 @@ def show_image(image):
     plt.imshow(img)
     plt.show()
 
+def train_single_image():
+    CUDA = torch.cuda.is_available()
+
+    # Create empty lists for average N_cut losses and reconstruction losses
+    n_cut_losses_avg = []
+    rec_losses_avg = []
+
+    # Squeeze k
+    # squeeze = args.squeeze
+    squeeze = 100
+    img_size = 256
+    wnet = WNet.WNet(squeeze, in_chans=1)
+    if(CUDA):
+        wnet = wnet.cuda()
+    learning_rate = 0.003
+    optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
+
+    n_cut_losses = []
+    rec_losses = []
+    start_time = time.time()
+
+    data1 = ReadDataset("data_segments_reduced.h5")[0][None, :]
+    data2 = ReadDataset("data_segments_reduced.h5")[1][None, :]
+    data_batch = torch.cat((data1, data2), 0)
+
+
+    for epoch in range(1000):
+        if (epoch > 0 and epoch % 1000 == 0):
+            learning_rate = learning_rate/10
+            optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
+
+        print("Epoch = " + str(epoch))
+
+
+
+        wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, data_batch, 1, img_size)
+        n_cut_losses.append(n_cut_loss.detach())
+        rec_losses.append(rec_loss.detach())
+        print(n_cut_losses[-1])
+
+
+    n_cut_losses_avg.append(torch.mean(torch.FloatTensor(n_cut_losses)))
+    rec_losses_avg.append(torch.mean(torch.FloatTensor(rec_losses)))
+    print("--- %s seconds ---" % (time.time() - start_time))
+
 def main():
     # Load the arguments
     # args, unknown = parser.parse_known_args()
@@ -93,7 +138,7 @@ def main():
 
     # Squeeze k
     # squeeze = args.squeeze
-    squeeze = 1000
+    squeeze = 10
     img_size = 256
     wnet = WNet.WNet(squeeze, in_chans=1)
     if(CUDA):
@@ -165,7 +210,8 @@ def main():
     print("Done")
 
 if __name__ == '__main__':
-    main()
+    # main()
+    train_single_image()
 
 
 # python .\train.py --e 100 --input_folder="data/images/" --output_folder="/output/"

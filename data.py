@@ -101,7 +101,9 @@ class ReadDataset(Dataset):
         return len(self.segment_names)
     
     def __getitem__(self, idx):
-        return torch.from_numpy(self.h5_file[self.segment_names[idx]][:]).float().unsqueeze(0) # unsqueeze: add channel axis
+        signal = self.h5_file[self.segment_names[idx]][:]
+        norm_signal = signal/np.max(signal) # normalize to [0,1]
+        return torch.from_numpy(norm_signal).float().unsqueeze(0) # unsqueeze: add channel axis
     
 
     

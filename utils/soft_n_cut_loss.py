@@ -6,10 +6,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from torch.nn.modules.utils import _pair, _quadruple
-import matplotlib.pyplot as plt
 
-def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=10):
-    channels = 1
+
+import matplotlib.pyplot as plt
+from matplotlib import cm
+from matplotlib.ticker import LinearLocator
+
+
+#RESET RADIUS TO 5
+
+def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=10): # maybe save the weights for images to then reuse?
     image = torch.mean(batch, dim=1, keepdim=True) # mean over channels which is 1? -> does nothing?
 
     image = F.pad(input=image, pad=(radius, radius), mode='constant', value=0) # pad around image to not reduce size
@@ -20,8 +26,10 @@ def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=10):
 
     # kh, kw = radius*2 + 1, radius*2 + 1
     # dh, dw = 1, 1
+    channels = 1
     kh = radius*2 + 1
     dh = 1
+
 
 
     distances = torch.abs(torch.arange(1, kh + 1) - radius - 1)
@@ -34,17 +42,17 @@ def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=10):
 
     patches = image.unfold(2, kh, dh) # sliding window over dimension 2, with size kh and step dh written into new dimension
     # patches = patches.contiguous().view(batch_size, channels, -1, kh)
-    patches = patches.permute(0, 2, 1, 3)
-    patches = patches.view(-1, channels, kh) # remove batch dimension by concatenating all batches
+    # patches = patches.permute(0, 2, 1, 3)
+    # patches = patches.view(-1, channels, kh) # remove batch dimension by concatenating all batches
     # patches: sliding window of size kh at each point written into new dimension
     # e.g.
     # [2,3,4,6,1,4,5,6,3,2,3]
     # [5,6,3,4,2,3,4,5,3,1,3]
     # [2,3,4,6,1,4,5,6,3,2,3]
 
-    center_values = patches[:, :, radius] # this is basically a copy of the input image but with concatenated batches and other dimensionality
-    center_values = center_values[:, :, None] # make new empty dimension
-    center_values = center_values.expand(-1, -1, kh) # expand tensor in dimension 2 by kh: batches x channels x 1 [10 1 1] -> [10 1 kh]
+    center_values = patches[:, :, :, radius] # get the center value of each sliding window
+    center_values = center_values[:, :, :, None] # make new empty dimension
+    center_values = center_values.expand(-1, -1, -1, kh) # expand tensor in dimension 3 by kh: batches x channels x 1 [10 1 1] -> [10 1 kh]
     # center_values: patches but each sliding window is filled with the value which is in the center position
     # e.g. for patches example
     # [4,4,4,4,4,4,4,4,4,4,4]
@@ -52,13 +60,22 @@ def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=10):
     # [4,4,4,4,4,4,4,4,4,4,4]
 
 
-    patches = torch.exp(torch.div(-1*((patches - center_values)**2), oi**2)) # exp(-||F(i)-F(j)||^2_2  /  sigma^2_I)
+    helper_matrix = patches - center_values
+    print(patches[0,0,20,:])
+    print(center_values[0,0,20,:])
+    print(helper_matrix[0,0,20,:])
+    # THIS IS BASICALLY ALWAYS [1,1,1,1,1,1,1,1] BECAUSE THE DISTANCES ARE VERY SMALL
+    patches = torch.exp(torch.div(-1*((helper_matrix)**2), oi**2)) # exp(-||F(i)-F(j)||^2_2  /  sigma^2_I)
     # patches - center_values: distance of each pixel value to its center pixel value
     # if a center value is the same as its neighbors, then this will return [0,0,0,0,0,0,0,0,0,0,0]
     # e.g.
     # [-2,-1,0,2,-3,...-1]
 
     # patches * distance_weights -> how similar are the pixels to each other, closer pixels have more influence
+
+
+
+
     return torch.mul(patches, distance_weights)
 
 # def test():
@@ -78,7 +95,6 @@ def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=10):
 def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
      # only one channel ("class") is given to this function
      # for this class the loss is calculated
-
     channels = 1
     kh, kw = radius*2 + 1, radius*2 + 1
     dh, dw = 1, 1
@@ -86,8 +102,8 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
 
     seg = encoding.unfold(2, kh, dh)
     # seg = seg.contiguous().view(batch_size, channels, -1, kh) # does this do anything?
-    seg = seg.permute(0, 2, 1, 3)
-    seg = seg.view(-1, channels, kh) # first dimension becomes batches x values (e.g. 4 x 256)
+    # seg = seg.permute(0, 2, 1, 3)
+    # seg = seg.view(-1,channels, kh) # first dimension becomes batches x values (e.g. 4 x 256)
     # seg now has the same shape as weights, but the values of seg are the encoded image for one class
     # while weights is calculated with the actual input image pixel values
     # seg is basically just reshaped and padded input encoding
@@ -96,7 +112,6 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
     # enc = p(u=A_k)
 
     nom = weights * seg
-    plt.plot(seg[4,0,:], label="segmentation")
     # nom: "for each pixel, compare class prediction to weights"
     # if two neighboring pixels recieved a "one" for this class and in the original image they also have the same value
     # then nom for this pixel is high. Therefore the nominator is high and therefore the return of this function is high
@@ -104,11 +119,51 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
 
     # if weights and nom have the same values for pixels, then nom is maximized
 
-    nominator = torch.sum(enc * torch.sum(nom, dim=(1,2)).reshape(batch_size, img_size), dim=(1,2))
-    denominator = torch.sum(enc * torch.sum(weights, dim=(1,2)).reshape(batch_size, img_size), dim=(1,2))
+
+    # sum_batches = torch.sum(nom, dim=(3))
+    # sum_weights = torch.sum(weights, dim=(3))
+
+    # nominator = torch.sum(enc * sum_batches, dim=(2)) # multiply each pixel (enc[i]) by each weighted pixel in the surrouding of the pixel (i) (sum_batches[i]) and sum them up
+    # denominator = torch.sum(enc * sum_weights, dim=(2))
+
+
+    enc = enc[:,:,:,None]
+
+    help_matrix_nom = enc * nom
+    plot_function(weights)
+    nominator = torch.sum(help_matrix_nom, dim = (2,3)) # shape: [batch_size, channels] = [batch_size, 1]
+
+    help_matrix_denom = enc * weights
+    denominator = torch.sum(help_matrix_denom, dim = (2,3))
+
 
     return torch.div(nominator, denominator)
 
+def plot_function(tensor):
+    tensor = tensor.detach().numpy()
+    tensor = tensor[:,:,90:120,:] # show only part of signal
+    radius = tensor.shape[3]
+    n_pixels = tensor.shape[2] + radius
+
+    pixels = np.arange(5, n_pixels - 6, 1)
+    padded_pixels = np.arange(0, n_pixels, 1)
+    a,b = np.meshgrid(padded_pixels, padded_pixels)
+    D = np.zeros((n_pixels, n_pixels))
+    for i in pixels:
+        D[i, i-5 : i+6] = tensor[0,0,i-6]
+    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+    surf = ax.plot_surface(a,b, D, cmap=cm.coolwarm,
+                       linewidth=0, antialiased=False)
+    # Customize the z axis.
+    ax.zaxis.set_major_locator(LinearLocator(10))
+    # A StrMethodFormatter is used automatically
+    ax.zaxis.set_major_formatter('{x:.02f}')
+
+    # Add a color bar which maps values to colors.
+    fig.colorbar(surf, shrink=0.5, aspect=5)
+
+    plt.show()
+    assert False
 
 
 def soft_n_cut_loss(batch, enc, img_size):
@@ -116,23 +171,18 @@ def soft_n_cut_loss(batch, enc, img_size):
     batch_size = batch.shape[0]
     k = enc.shape[1]
     weights = calculate_weights(batch, batch_size, img_size)
-    plt.plot(weights[4,0,:], label="weights")
     for i in range(0, k):
         loss.append(soft_n_cut_loss_single_k(weights, enc[:, (i,), :], batch_size, img_size))
-        plt.legend()
-        plt.show()
-
     da = torch.stack(loss)
     return torch.mean(k - torch.sum(da, dim=0))
 
 
 def test2():
     original = torch.tensor([[[255.0,255.0,255.0,255.0,255.0,0.0,0.0,0.0,0.0,0.0]]]).float()
-    #plt.plot(original[0,0,:], label="original image")
-    channel1 = torch.tensor([[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]]]).float()
-    enc = torch.nn.Softmax(dim=1)(torch.cat((channel1, 1-channel1), dim = 1))
+    channel1 = torch.tensor([[[10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0]]]).float()
+    enc = torch.nn.Softmax(dim=1)(torch.cat((channel1, -1*channel1), dim = 1))
     plt.plot(enc[0,0,:], label="raw class")
     plt.plot(enc[0,1,:], label="raw class")
     print(soft_n_cut_loss(original, enc, 10))
 
-test2()
+# test2()
