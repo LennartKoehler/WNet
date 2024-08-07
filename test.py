@@ -1,7 +1,10 @@
 import matplotlib.pyplot as plt
 import torch
+from data import ReadDataset
+import numpy as np
 
-a = torch.tensor([1,2,3,4,5,6,7,8,9,10])
-b = torch.tensor([[1,2,3,4,5,6,7,8,9,10],[1,2,3,4,5,6,7,8,9,10]])
 
-print(a[0:5])
+dataset = ReadDataset("data_segments_reduced.h5")
+print(dataset[0])
+plt.plot(np.arange(0,len(dataset[0])),dataset[0][:])
+plt.show()

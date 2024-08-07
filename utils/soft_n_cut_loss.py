@@ -13,9 +13,8 @@ from matplotlib import cm
 from matplotlib.ticker import LinearLocator
 
 
-#RESET RADIUS TO 5
 
-def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=10): # maybe save the weights for images to then reuse?
+def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=1): # maybe save the weights for images to then reuse?
     image = torch.mean(batch, dim=1, keepdim=True) # mean over channels which is 1? -> does nothing?
 
     image = F.pad(input=image, pad=(radius, radius), mode='constant', value=0) # pad around image to not reduce size
@@ -61,11 +60,8 @@ def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=10): #
 
 
     helper_matrix = patches - center_values
-    print(patches[0,0,20,:])
-    print(center_values[0,0,20,:])
-    print(helper_matrix[0,0,20,:])
-    # THIS IS BASICALLY ALWAYS [1,1,1,1,1,1,1,1] BECAUSE THE DISTANCES ARE VERY SMALL
-    patches = torch.exp(torch.div(-1*((helper_matrix)**2), oi**2)) # exp(-||F(i)-F(j)||^2_2  /  sigma^2_I)
+    # THIS IS BASICALLY ALWAYS [1,1,1,1,1,1,1,1] BECAUSE THE DISTANCES IN PIXEL VALUE ARE VERY SMALL
+    patches = torch.exp(torch.div(-1*((helper_matrix*10)**2), oi**2)) # exp(-||F(i)-F(j)||^2_2  /  sigma^2_I)
     # patches - center_values: distance of each pixel value to its center pixel value
     # if a center value is the same as its neighbors, then this will return [0,0,0,0,0,0,0,0,0,0,0]
     # e.g.
@@ -130,7 +126,7 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
     enc = enc[:,:,:,None]
 
     help_matrix_nom = enc * nom
-    plot_function(weights)
+    # plot_function(weights)
     nominator = torch.sum(help_matrix_nom, dim = (2,3)) # shape: [batch_size, channels] = [batch_size, 1]
 
     help_matrix_denom = enc * weights
@@ -163,7 +159,6 @@ def plot_function(tensor):
     fig.colorbar(surf, shrink=0.5, aspect=5)
 
     plt.show()
-    assert False
 
 
 def soft_n_cut_loss(batch, enc, img_size):
