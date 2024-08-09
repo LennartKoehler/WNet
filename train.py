@@ -89,7 +89,7 @@ def train_single_image():
 
     # Squeeze k
     # squeeze = args.squeeze
-    squeeze = 100
+    squeeze = 3
     img_size = 256
     wnet = WNet.WNet(squeeze, in_chans=1)
     if(CUDA):
@@ -118,7 +118,6 @@ def train_single_image():
         wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, data_batch, 1, img_size)
         n_cut_losses.append(n_cut_loss.detach())
         rec_losses.append(rec_loss.detach())
-        print(n_cut_losses[-1])
 
 
     n_cut_losses_avg.append(torch.mean(torch.FloatTensor(n_cut_losses)))
@@ -187,7 +186,9 @@ def main():
             n_cut_losses.append(n_cut_loss.detach())
             rec_losses.append(rec_loss.detach())
             if idx%10==0:
-                print(n_cut_loss.item(), rec_loss.item())
+                pass
+                # print(n_cut_loss.item())
+                #print(rec_loss.item())
 
 
 

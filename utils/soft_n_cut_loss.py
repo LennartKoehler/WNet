@@ -96,7 +96,12 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
     dh, dw = 1, 1
     encoding = F.pad(input=enc, pad=(radius, radius), mode='constant', value=0)
 
-    seg = encoding.unfold(2, kh, dh)
+    enc_windows = encoding.unfold(2, kh, dh)
+
+    print("enc\n",enc[0,0,30],"\n")
+    print("enc_windows\n",enc_windows[0,0,30,:],"\n")
+    print("weights\n",weights[0,0,30,:],"\n")
+
     # seg = seg.contiguous().view(batch_size, channels, -1, kh) # does this do anything?
     # seg = seg.permute(0, 2, 1, 3)
     # seg = seg.view(-1,channels, kh) # first dimension becomes batches x values (e.g. 4 x 256)
@@ -107,7 +112,9 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
     # seg = p(v=A_k)
     # enc = p(u=A_k)
 
-    nom = weights * seg
+    nom = weights * enc_windows
+    print("nom\n",nom[0,0,30,:],"\n")
+
     # nom: "for each pixel, compare class prediction to weights"
     # if two neighboring pixels recieved a "one" for this class and in the original image they also have the same value
     # then nom for this pixel is high. Therefore the nominator is high and therefore the return of this function is high
@@ -126,14 +133,20 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
     enc = enc[:,:,:,None]
 
     help_matrix_nom = enc * nom
-    # plot_function(weights)
+    print("help_matrix_nom\n",help_matrix_nom[0,0,30,:],"\n")
+
     nominator = torch.sum(help_matrix_nom, dim = (2,3)) # shape: [batch_size, channels] = [batch_size, 1]
 
     help_matrix_denom = enc * weights
+    print("help_matrix_denom\n",help_matrix_denom[0,0,30,:],"\n")
+
     denominator = torch.sum(help_matrix_denom, dim = (2,3))
 
-
-    return torch.div(nominator, denominator)
+    result = torch.div(nominator, denominator)
+    # result = result.detach().numpy()
+    # plt.plot(np.arange(0, len(result[0,0,:])),result[0,0,:])
+    # plt.show()
+    return result
 
 def plot_function(tensor):
     tensor = tensor.detach().numpy()
@@ -168,8 +181,10 @@ def soft_n_cut_loss(batch, enc, img_size):
     weights = calculate_weights(batch, batch_size, img_size)
     for i in range(0, k):
         loss.append(soft_n_cut_loss_single_k(weights, enc[:, (i,), :], batch_size, img_size))
-    da = torch.stack(loss)
-    return torch.mean(k - torch.sum(da, dim=0))
+    losses_of_all_classes = torch.stack(loss)
+    sum_over_classes = torch.sum(losses_of_all_classes, dim=0)
+    mean_over_batches = torch.mean(k - sum_over_classes)
+    return mean_over_batches
 
 
 def test2():
