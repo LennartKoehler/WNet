@@ -74,19 +74,6 @@ def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=1): # 
 
     return torch.mul(patches, distance_weights)
 
-# def test():
-#     batch = torch.tensor([[[1.0, 55.0, 13.0 , 25.0, 500.0]]])
-#     print(calculate_weights(batch, 1, 5, radius=1))
-
-#   returns: tensor([[[9.3007e-01, 1.0000e+00, 2.0362e-13]],
-
-#         [[2.0362e-13, 1.0000e+00, 2.0507e-08]],
-
-#         [[2.0507e-08, 1.0000e+00, 2.2257e-01]],
-
-#         [[2.2257e-01, 1.0000e+00, 0.0000e+00]],
-
-#         [[0.0000e+00, 1.0000e+00, 0.0000e+00]]])
 
 def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
      # only one channel ("class") is given to this function
@@ -148,6 +135,27 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
     # plt.show()
     return result
 
+
+def soft_n_cut_loss(batch, enc, img_size):
+    loss = []
+    batch_size = batch.shape[0]
+    k = enc.shape[1]
+    weights = calculate_weights(batch, batch_size, img_size)
+    for i in range(0, k):
+        loss.append(soft_n_cut_loss_single_k(weights, enc[:, (i,), :], batch_size, img_size))
+    losses_of_all_classes = torch.stack(loss)
+    sum_over_classes = torch.sum(losses_of_all_classes, dim=0)
+    mean_over_batches = torch.mean(k - sum_over_classes)
+    return mean_over_batches
+
+
+def test2():
+    original = torch.tensor([[[255.0,255.0,255.0,255.0,255.0,0.0,0.0,0.0,0.0,0.0]]]).float()
+    channel1 = torch.tensor([[[10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0]]]).float()
+    enc = torch.nn.Softmax(dim=1)(torch.cat((channel1, -1*channel1), dim = 1))
+    plt.plot(enc[0,0,:], label="raw class")
+    plt.plot(enc[0,1,:], label="raw class")
+    print(soft_n_cut_loss(original, enc, 10))
 def plot_function(tensor):
     tensor = tensor.detach().numpy()
     tensor = tensor[:,:,90:120,:] # show only part of signal
@@ -173,26 +181,16 @@ def plot_function(tensor):
 
     plt.show()
 
+def test():
+    batch = torch.tensor([[[1.0, 55.0, 13.0 , 25.0, 500.0]]])
+    print(calculate_weights(batch, 1, 5, radius=1))
 
-def soft_n_cut_loss(batch, enc, img_size):
-    loss = []
-    batch_size = batch.shape[0]
-    k = enc.shape[1]
-    weights = calculate_weights(batch, batch_size, img_size)
-    for i in range(0, k):
-        loss.append(soft_n_cut_loss_single_k(weights, enc[:, (i,), :], batch_size, img_size))
-    losses_of_all_classes = torch.stack(loss)
-    sum_over_classes = torch.sum(losses_of_all_classes, dim=0)
-    mean_over_batches = torch.mean(k - sum_over_classes)
-    return mean_over_batches
+#   returns: tensor([[[9.3007e-01, 1.0000e+00, 2.0362e-13]],
 
+#         [[2.0362e-13, 1.0000e+00, 2.0507e-08]],
 
-def test2():
-    original = torch.tensor([[[255.0,255.0,255.0,255.0,255.0,0.0,0.0,0.0,0.0,0.0]]]).float()
-    channel1 = torch.tensor([[[10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0]]]).float()
-    enc = torch.nn.Softmax(dim=1)(torch.cat((channel1, -1*channel1), dim = 1))
-    plt.plot(enc[0,0,:], label="raw class")
-    plt.plot(enc[0,1,:], label="raw class")
-    print(soft_n_cut_loss(original, enc, 10))
+#         [[2.0507e-08, 1.0000e+00, 2.2257e-01]],
 
-# test2()
+#         [[2.2257e-01, 1.0000e+00, 0.0000e+00]],
+
+#         [[0.0000e+00, 1.0000e+00, 0.0000e+00]]])

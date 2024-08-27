@@ -50,18 +50,13 @@ def train_op(model, optimizer, input, k, img_size, psi=0.5): # model = WNet
     optimizer.zero_grad()
 
 
-    # dec = model(input, returns='dec')
-    # rec_loss=reconstruction_loss(input, dec)
-    # rec_loss.backward()
-    # optimizer.step()
-    # optimizer.zero_grad()
-    rec_loss = torch.tensor(1)
+    dec = model(input, returns='dec')
+    rec_loss=reconstruction_loss(input, dec)
+    rec_loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+    # rec_loss = torch.tensor(1)
 
-    # dec = model(input, returns='dec')
-    # rec_loss=reconstruction_loss(input, dec)
-    # rec_loss.backward()
-    # optimizer.step()
-    # optimizer.zero_grad()
 
     return (model, n_cut_loss, rec_loss)
 
@@ -89,7 +84,7 @@ def train_single_image():
 
     # Squeeze k
     # squeeze = args.squeeze
-    squeeze = 4
+    squeeze = 2
     img_size = 256
     wnet = WNet.WNet(squeeze, in_chans=1)
     if(CUDA):
@@ -107,7 +102,7 @@ def train_single_image():
     data_batch = torch.cat((data1, data2), 0)
 
 
-    for epoch in range(5000):
+    for epoch in range(500):
         if (epoch > 0 and epoch % 1000 == 0):
             learning_rate = learning_rate/10
             optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
@@ -126,7 +121,7 @@ def train_single_image():
     n_cut_losses_avg.append(torch.mean(torch.FloatTensor(n_cut_losses)))
     rec_losses_avg.append(torch.mean(torch.FloatTensor(rec_losses)))
     print("--- %s seconds ---" % (time.time() - start_time))
-    # torch.save(wnet.state_dict(), "wnet_state_dict_k4.pkl")
+    torch.save(wnet.state_dict(), "wnet_state_dict_with_rec_loss_500_epoch.pkl")
 
 
 def test():
@@ -136,6 +131,8 @@ def test():
     wnet = WNet.WNet(2)
     wnet.load_state_dict(torch.load("wnet_state_dict.pkl"))
     plot_classification(WNet.WNet(2), data_batch)
+    plot_classification(wnet, data_batch)
+    wnet.load_state_dict(torch.load("wnet_state_dict_with_rec_loss_500_epoch.pkl"))
     plot_classification(wnet, data_batch)
 
 def plot_classification(model, data_batch):
