@@ -38,12 +38,12 @@ parser.add_argument('--output_folder', metavar='of', default=None, type=str,
 
 
 
-softmax = nn.Softmax(dim=1) # is this the right dimension? -> should be the dimension of channels (classes) where each pixel hast a probability for each class
+softmax = nn.Softmax(dim=1) # is this the right dimension? -> should be the dimension of channels (classes) where each pixel has a probability for each class
 criterionIdt = torch.nn.MSELoss()
 
 def train_op(model, optimizer, input, k, img_size, psi=0.5): # model = WNet
     enc = model(input, returns='enc')
-    d = enc.clone().detach()
+    # d = enc.clone().detach()
     n_cut_loss=soft_n_cut_loss(input,  softmax(enc),  img_size)
     n_cut_loss.backward()
     optimizer.step()
@@ -89,12 +89,13 @@ def train_single_image():
 
     # Squeeze k
     # squeeze = args.squeeze
-    squeeze = 3
+    squeeze = 4
     img_size = 256
     wnet = WNet.WNet(squeeze, in_chans=1)
     if(CUDA):
         wnet = wnet.cuda()
-    learning_rate = 0.003
+    # learning_rate = 0.003
+    learning_rate = 0.01
     optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
 
     n_cut_losses = []
@@ -106,23 +107,47 @@ def train_single_image():
     data_batch = torch.cat((data1, data2), 0)
 
 
-    for epoch in range(1000):
+    for epoch in range(5000):
         if (epoch > 0 and epoch % 1000 == 0):
             learning_rate = learning_rate/10
             optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
 
-        print("Epoch = " + str(epoch))
 
 
 
         wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, data_batch, 1, img_size)
         n_cut_losses.append(n_cut_loss.detach())
         rec_losses.append(rec_loss.detach())
-
+        if epoch%10 == 0:
+            print("Epoch = " + str(epoch))
+            print("n_cut_loss", n_cut_loss.item())
+            print("rec_loss", rec_loss.item())
 
     n_cut_losses_avg.append(torch.mean(torch.FloatTensor(n_cut_losses)))
     rec_losses_avg.append(torch.mean(torch.FloatTensor(rec_losses)))
     print("--- %s seconds ---" % (time.time() - start_time))
+    # torch.save(wnet.state_dict(), "wnet_state_dict_k4.pkl")
+
+
+def test():
+    data1 = ReadDataset("data_segments_reduced.h5")[0][None, :]
+    data2 = ReadDataset("data_segments_reduced.h5")[1][None, :]
+    data_batch = torch.cat((data1, data2), 0)
+    wnet = WNet.WNet(2)
+    wnet.load_state_dict(torch.load("wnet_state_dict.pkl"))
+    plot_classification(WNet.WNet(2), data_batch)
+    plot_classification(wnet, data_batch)
+
+def plot_classification(model, data_batch):
+    enc = softmax(model(data_batch, returns='enc'))
+
+    fig, ax = plt.subplots(2)
+    enc = enc[0, 0,:] - enc[0, 1,:]
+    ax[0].plot(enc.detach().numpy())
+    ax[1].plot(data_batch[0, 0,:].detach().numpy())
+    plt.show()
+
+
 
 def main():
     # Load the arguments
@@ -212,7 +237,8 @@ def main():
 
 if __name__ == '__main__':
     # main()
-    train_single_image()
+    # train_single_image()
+    test()
 
 
 # python .\train.py --e 100 --input_folder="data/images/" --output_folder="/output/"

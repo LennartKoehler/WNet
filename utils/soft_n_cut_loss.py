@@ -98,9 +98,9 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
 
     enc_windows = encoding.unfold(2, kh, dh)
 
-    print("enc\n",enc[0,0,30],"\n")
-    print("enc_windows\n",enc_windows[0,0,30,:],"\n")
-    print("weights\n",weights[0,0,30,:],"\n")
+    # print("enc\n",enc[0,0,30],"\n")
+    # print("enc_windows\n",enc_windows[0,0,30,:],"\n")
+    # print("weights\n",weights[0,0,30,:],"\n")
 
     # seg = seg.contiguous().view(batch_size, channels, -1, kh) # does this do anything?
     # seg = seg.permute(0, 2, 1, 3)
@@ -113,7 +113,7 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
     # enc = p(u=A_k)
 
     nom = weights * enc_windows
-    print("nom\n",nom[0,0,30,:],"\n")
+    # print("nom\n",nom[0,0,30,:],"\n")
 
     # nom: "for each pixel, compare class prediction to weights"
     # if two neighboring pixels recieved a "one" for this class and in the original image they also have the same value
@@ -133,12 +133,12 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
     enc = enc[:,:,:,None]
 
     help_matrix_nom = enc * nom
-    print("help_matrix_nom\n",help_matrix_nom[0,0,30,:],"\n")
+    # print("help_matrix_nom\n",help_matrix_nom[0,0,30,:],"\n")
 
     nominator = torch.sum(help_matrix_nom, dim = (2,3)) # shape: [batch_size, channels] = [batch_size, 1]
 
     help_matrix_denom = enc * weights
-    print("help_matrix_denom\n",help_matrix_denom[0,0,30,:],"\n")
+    # print("help_matrix_denom\n",help_matrix_denom[0,0,30,:],"\n")
 
     denominator = torch.sum(help_matrix_denom, dim = (2,3))
 
