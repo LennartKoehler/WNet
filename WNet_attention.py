@@ -56,20 +56,30 @@ class UEnc(nn.Module):
         super(UEnc, self).__init__()
         
         self.enc1=Block(in_chans, ch_mul, seperable=False)
+        self.att1=torch.nn.MultiheadAttention(ch_mul, 4, batch_first=True)
+
         self.enc2=Block(ch_mul, 2*ch_mul)
+        self.att2=torch.nn.MultiheadAttention(2*ch_mul, 4, batch_first=True)
+
         self.enc3=Block(2*ch_mul, 4*ch_mul)
+        self.att3=torch.nn.MultiheadAttention(4*ch_mul, 4, batch_first=True)
+
         self.enc4=Block(4*ch_mul, 8*ch_mul)
+        self.att4=torch.nn.MultiheadAttention(8*ch_mul, 4, batch_first=True)
         
         self.middle=Block(8*ch_mul, 16*ch_mul)
         
         self.up1=nn.ConvTranspose1d(16*ch_mul, 8*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
-        self.dec1=Block(16*ch_mul, 8*ch_mul)
+        self.dec1=Block(24*ch_mul, 8*ch_mul)
+
         self.up2=nn.ConvTranspose1d(8*ch_mul, 4*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
-        self.dec2=Block(8*ch_mul, 4*ch_mul)
+        self.dec2=Block(12*ch_mul, 4*ch_mul)
+
         self.up3=nn.ConvTranspose1d(4*ch_mul, 2*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
-        self.dec3=Block(4*ch_mul, 2*ch_mul)
+        self.dec3=Block(6*ch_mul, 2*ch_mul)
+
         self.up4=nn.ConvTranspose1d(2*ch_mul, ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
-        self.dec4=Block(2*ch_mul, ch_mul, seperable=False)
+        self.dec4=Block(3*ch_mul, ch_mul, seperable=False)
         
         self.final=nn.Conv1d(ch_mul, squeeze, kernel_size=1)
         self.softmax = nn.Softmax()
@@ -77,27 +87,114 @@ class UEnc(nn.Module):
     def forward(self, x):
         
         enc1=self.enc1(x)
+        enc1_permute = enc1.permute(0, 2, 1) # permute for multihead attention
+        att1 = self.att1(enc1_permute, enc1_permute, enc1_permute, need_weights=False)[0] # only return outputs, not weights
+        att1 = att1.permute(0, 2, 1)
+
+
+        enc2=self.enc2(F.max_pool1d(att1, (4)))
+        enc2_permute = enc2.permute(0, 2, 1) 
+        att2 = self.att2(enc2_permute, enc2_permute, enc2_permute, need_weights=False)[0]
+        att2 = att2.permute(0, 2, 1)
         
-        enc2=self.enc2(F.max_pool1d(enc1, (4)))
+        enc3=self.enc3(F.max_pool1d(att2, (4)))
+        enc3_permute = enc3.permute(0, 2, 1) 
+        att3 = self.att3(enc3_permute, enc3_permute, enc3_permute, need_weights=False)[0]
+        att3 = att3.permute(0, 2, 1)
+
+        enc4=self.enc4(F.max_pool1d(att3, (4)))
+        enc4_permute = enc4.permute(0, 2, 1) 
+        att4 = self.att4(enc4_permute, enc4_permute, enc4_permute, need_weights=False)[0]
+        att4 = att4.permute(0, 2, 1)        
         
-        enc3=self.enc3(F.max_pool1d(enc2, (4)))
-        
-        enc4=self.enc4(F.max_pool1d(enc3, (4)))
-        
-        
-        middle=self.middle(F.max_pool1d(enc4, (4)))
+        middle=self.middle(F.max_pool1d(att4, (4)))
         
         m2 = self.up1(middle)
-        up1=torch.cat([enc4, m2], 1)
+        up1=torch.cat([enc4, att4, m2], 1)
         dec1=self.dec1(up1)
         
-        up2=torch.cat([enc3, self.up2(dec1)], 1)
+        up2=torch.cat([enc3, att3, self.up2(dec1)], 1)
         dec2=self.dec2(up2)
         
-        up3=torch.cat([enc2, self.up3(dec2)], 1)
+        up3=torch.cat([enc2, att2, self.up3(dec2)], 1)
         dec3=self.dec3(up3)
         
-        up4=torch.cat([enc1, self.up4(dec3)], 1)
+        up4=torch.cat([enc1, att1, self.up4(dec3)], 1)
+        dec4=self.dec4(up4)
+        
+        
+        final=self.final(dec4)
+            
+        return final
+    
+class UDec(nn.Module):
+    def __init__(self, squeeze, ch_mul=64, in_chans=1):
+        super(UDec, self).__init__()
+        
+        self.enc1=Block(squeeze, ch_mul, seperable=False)
+        self.att1=torch.nn.MultiheadAttention(ch_mul, 4, batch_first=True)
+
+        self.enc2=Block(ch_mul, 2*ch_mul)
+        self.att2=torch.nn.MultiheadAttention(2*ch_mul, 4, batch_first=True)
+
+        self.enc3=Block(2*ch_mul, 4*ch_mul)
+        self.att3=torch.nn.MultiheadAttention(4*ch_mul, 4, batch_first=True)
+
+        self.enc4=Block(4*ch_mul, 8*ch_mul)
+        self.att4=torch.nn.MultiheadAttention(8*ch_mul, 4, batch_first=True)
+        
+        self.middle=Block(8*ch_mul, 16*ch_mul)
+        
+        self.up1=nn.ConvTranspose1d(16*ch_mul, 8*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
+        self.dec1=Block(24*ch_mul, 8*ch_mul)
+
+        self.up2=nn.ConvTranspose1d(8*ch_mul, 4*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
+        self.dec2=Block(12*ch_mul, 4*ch_mul)
+
+        self.up3=nn.ConvTranspose1d(4*ch_mul, 2*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
+        self.dec3=Block(6*ch_mul, 2*ch_mul)
+
+        self.up4=nn.ConvTranspose1d(2*ch_mul, ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
+        self.dec4=Block(3*ch_mul, ch_mul, seperable=False)
+        
+        self.final=nn.Conv1d(ch_mul, in_chans, kernel_size=1)
+        
+    def forward(self, x):
+
+        enc1=self.enc1(x)
+        enc1_permute = enc1.permute(0, 2, 1) # permute for multihead attention
+        att1 = self.att1(enc1_permute, enc1_permute, enc1_permute, need_weights=False)[0] # only return outputs, not weights
+        att1 = att1.permute(0, 2, 1)
+
+
+        enc2=self.enc2(F.max_pool1d(att1, (4)))
+        enc2_permute = enc2.permute(0, 2, 1) 
+        att2 = self.att2(enc2_permute, enc2_permute, enc2_permute, need_weights=False)[0]
+        att2 = att2.permute(0, 2, 1)
+        
+        enc3=self.enc3(F.max_pool1d(att2, (4)))
+        enc3_permute = enc3.permute(0, 2, 1) 
+        att3 = self.att3(enc3_permute, enc3_permute, enc3_permute, need_weights=False)[0]
+        att3 = att3.permute(0, 2, 1)
+
+        enc4=self.enc4(F.max_pool1d(att3, (4)))
+        enc4_permute = enc4.permute(0, 2, 1) 
+        att4 = self.att4(enc4_permute, enc4_permute, enc4_permute, need_weights=False)[0]
+        att4 = att4.permute(0, 2, 1)        
+        
+        middle=self.middle(F.max_pool1d(att4, (4)))
+        
+        m2 = self.up1(middle)
+        up1=torch.cat([enc4, att4, m2], 1)
+        dec1=self.dec1(up1)
+        
+        up2=torch.cat([enc3, att3, self.up2(dec1)], 1)
+        dec2=self.dec2(up2)
+        
+        up3=torch.cat([enc2, att2, self.up3(dec2)], 1)
+        dec3=self.dec3(up3)
+        
+        up4=torch.cat([enc1, att1, self.up4(dec3)], 1)
         dec4=self.dec4(up4)
         
         
@@ -105,58 +202,6 @@ class UEnc(nn.Module):
             
         return final
 
-class UDec(nn.Module):
-    def __init__(self, squeeze, ch_mul=64, in_chans=1):
-        super(UDec, self).__init__()
-        
-        self.enc1=Block(squeeze, ch_mul, seperable=False)
-        self.enc2=Block(ch_mul, 2*ch_mul)
-        self.enc3=Block(2*ch_mul, 4*ch_mul)
-        self.enc4=Block(4*ch_mul, 8*ch_mul)
-        
-        self.middle=Block(8*ch_mul, 16*ch_mul)
-        
-        self.up1=nn.ConvTranspose1d(16*ch_mul, 8*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
-        self.dec1=Block(16*ch_mul, 8*ch_mul)
-        self.up2=nn.ConvTranspose1d(8*ch_mul, 4*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
-        self.dec2=Block(8*ch_mul, 4*ch_mul)
-        self.up3=nn.ConvTranspose1d(4*ch_mul, 2*ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
-        self.dec3=Block(4*ch_mul, 2*ch_mul)
-        self.up4=nn.ConvTranspose1d(2*ch_mul, ch_mul, kernel_size=5, stride=4, padding=1, output_padding=1)
-        self.dec4=Block(2*ch_mul, ch_mul, seperable=False)
-        
-        self.final=nn.Conv1d(ch_mul, in_chans, kernel_size=1)
-        
-    def forward(self, x):
-        
-        enc1 = self.enc1(x)
-        
-        enc2 = self.enc2(F.max_pool1d(enc1, (4)))
-        
-        enc3 = self.enc3(F.max_pool1d(enc2, (4)))
-        
-        enc4 = self.enc4(F.max_pool1d(enc3, (4)))
-        
-        
-        middle = self.middle(F.max_pool1d(enc4, (4)))
-        
-        
-        up1 = torch.cat([enc4, self.up1(middle)], 1)
-        dec1 = self.dec1(up1)
-        
-        up2 = torch.cat([enc3, self.up2(dec1)], 1)
-        dec2 = self.dec2(up2)
-        
-        up3 = torch.cat([enc2, self.up3(dec2)], 1)
-        dec3 =self.dec3(up3)
-        
-        up4 = torch.cat([enc1, self.up4(dec3)], 1)
-        dec4 = self.dec4(up4)
-        
-        
-        final=self.final(dec4)
-        
-        return final
 
 class WNet(nn.Module):
     def __init__(self, squeeze, ch_mul=64, in_chans=1, out_chans=1000):
