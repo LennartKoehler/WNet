@@ -17,8 +17,8 @@ from utils.org_soft_n_cut_loss import batch_soft_n_cut_loss
 from utils.soft_n_cut_loss import soft_n_cut_loss
 
 from data import ReadDataset
-import WNet_attention as WNet
-#import WNet
+#import WNet_attention as WNet
+import WNet
 import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description='PyTorch Unsupervised Segmentation with WNet')
@@ -57,8 +57,6 @@ def train_op(model, optimizer, input, k, img_size, psi=0.5): # model = WNet
     optimizer.step()
     optimizer.zero_grad()
     # rec_loss = torch.tensor(1)
-
-
     return (model, n_cut_loss, rec_loss)
 
 def reconstruction_loss(x, x_prime):
@@ -125,26 +123,6 @@ def train_single_image():
     torch.save(wnet.state_dict(), "wnet_state_dict_with_rec_loss_500_epoch.pkl")
 
 
-def test():
-    data1 = ReadDataset("data_segments_reduced.h5")[0][None, :]
-    data2 = ReadDataset("data_segments_reduced.h5")[1][None, :]
-    data_batch = torch.cat((data1, data2), 0)
-    wnet = WNet.WNet(2)
-    wnet.load_state_dict(torch.load("wnet_state_dict.pkl"))
-    plot_classification(WNet.WNet(2), data_batch)
-    plot_classification(wnet, data_batch)
-    wnet.load_state_dict(torch.load("wnet_state_dict_with_rec_loss_500_epoch.pkl"))
-    plot_classification(wnet, data_batch)
-
-def plot_classification(model, data_batch):
-    enc = softmax(model(data_batch, returns='enc'))
-
-    fig, ax = plt.subplots(2)
-    enc = enc[0, 0,:] - enc[0, 1,:]
-    ax[0].plot(enc.detach().numpy())
-    ax[1].plot(data_batch[0, 0,:].detach().numpy())
-    plt.show()
-
 
 
 def main():
@@ -165,7 +143,7 @@ def main():
     wnet = WNet.WNet(squeeze, in_chans=1)
     if(CUDA):
         wnet = wnet.cuda()
-    learning_rate = 0.003
+    learning_rate = 0.01
     optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
 
 
@@ -209,9 +187,9 @@ def main():
             n_cut_losses.append(n_cut_loss.detach())
             rec_losses.append(rec_loss.detach())
             if idx%10==0:
-                pass
-                # print(n_cut_loss.item())
-                #print(rec_loss.item())
+                print(f"n_cut_loss: {n_cut_loss.item()}")
+                print(f"rec_loss: {rec_loss.item()} \n")
+
 
 
 
@@ -220,23 +198,22 @@ def main():
         print("--- %s seconds ---" % (time.time() - start_time))
 
 
-    images, labels = next(iter(dataloader))
+    # images, labels = next(iter(dataloader))
 
-    # Run wnet with cuda if enabled
-    if CUDA:
-        images = images.cuda()
+    # # Run wnet with cuda if enabled
+    # if CUDA:
+    #     images = images.cuda()
 
-    enc, dec = wnet(images)
+    # enc, dec = wnet(images)
 
-    torch.save(wnet.state_dict(), "model_" + "test")
-    np.save("n_cut_losses_" + "test", n_cut_losses_avg)
-    np.save("rec_losses_" + "test", rec_losses_avg)
+    torch.save(wnet.state_dict(), "models/model_" + "test_orig")
+    np.save("models/n_cut_losses_" + "test_orig", n_cut_losses_avg)
+    np.save("models/rec_losses_" + "test_orig", rec_losses_avg)
     print("Done")
 
 if __name__ == '__main__':
-    # main()
-    train_single_image()
-    test()
+    main()
+
 
 
 # python .\train.py --e 100 --input_folder="data/images/" --output_folder="/output/"

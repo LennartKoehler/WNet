@@ -7,8 +7,13 @@ Created on Mon Oct 15 20:36:27 2018
 
 import train
 import WNet
+import WNet_attention
 import torch
 import numpy as np
+from data import ReadDataset
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import torch.nn as nn
 
 def EncoderTest(verbose=True):
     shape=(2, 4, 224, 224)
@@ -51,4 +56,22 @@ def AllTest():
     TrainTest()
     print('WNet Passed All Tests!')
 
-AllTest()
+def test():
+    for i in range(0,10,2):
+        data1 = ReadDataset("data_segments_reduced.h5")[i][None, :]
+        data2 = ReadDataset("data_segments_reduced.h5")[i+1][None, :]
+        data_batch = torch.cat((data1, data2), 0)
+        wnet = WNet.WNet(10)
+        wnet.load_state_dict(torch.load("models/model_test_orig"))
+        plot_classification(wnet, data_batch)
+
+def plot_classification(model, data_batch):
+    enc = torch.argmax(model(data_batch, returns='enc'), dim=1, keepdim=False).detach().numpy()
+    fig, ax = plt.subplots(2)
+    x = np.arange(0,len(enc[0,:]))
+    ax[0].plot(x, enc[0,:])
+    ax[1].plot(data_batch[0, 0,:].detach().numpy())
+    plt.show()
+
+if __name__ == '__main__':
+    test()
