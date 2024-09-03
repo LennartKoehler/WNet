@@ -73,5 +73,13 @@ def plot_classification(model, data_batch):
     ax[1].plot(data_batch[0, 0,:].detach().numpy())
     plt.show()
 
+def plot_loss():
+    loss_original = np.load("models/rec_losses_test_orig.npy")
+    loss_attention = np.load("models/rec_losses_test_att.npy")
+    plt.plot(loss_original, label="original")
+    plt.plot(loss_attention, label="attention")
+    plt.legend()
+    plt.show()
+
 if __name__ == '__main__':
-    test()
+    plot_loss()

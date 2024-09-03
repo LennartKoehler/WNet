@@ -126,9 +126,6 @@ def train_single_image():
 
 
 def main():
-    # Load the arguments
-    # args, unknown = parser.parse_known_args()
-
     # Check if CUDA is available
     CUDA = torch.cuda.is_available()
 
@@ -138,15 +135,17 @@ def main():
 
     # Squeeze k
     # squeeze = args.squeeze
+
+    #------------------Parameters-----------------
     squeeze = 10
     img_size = 256
     wnet = WNet.WNet(squeeze, in_chans=1)
-    if(CUDA):
-        wnet = wnet.cuda()
     learning_rate = 0.01
     optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
-
-
+    batch_size = 10
+    epochs = 10
+    num_workers = 0
+    #---------------------------------------------
     # transform = transforms.Compose([transforms.Resize(img_size),
     #                             transforms.ToTensor()])
 
@@ -156,31 +155,25 @@ def main():
     # dataloader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=True)
 
     dataset = ReadDataset("data_segments_reduced.h5")
+    if(CUDA):
+        wnet = wnet.cuda()
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=True)
 
-    # Run for every epoch
-    # for epoch in range(args.epochs):
-    for epoch in range(10):
+    for epoch in range(epochs):
 
         # At 1000 epochs divide SGD learning rate by 10
         if (epoch > 0 and epoch % 1000 == 0):
             learning_rate = learning_rate/10
             optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
 
-        # Print out every epoch:
         print("Epoch = " + str(epoch))
 
-        # Create empty lists for N_cut losses and reconstruction losses
         n_cut_losses = []
         rec_losses = []
         start_time = time.time()
 
         for (idx, batch) in enumerate(dataloader):
-            # Train 1 image idx > 1
-            # if(idx > 1): break
-
-            # Train Wnet with CUDA if available
             if CUDA:
                 batch = batch.cuda()
             wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, batch, 1, img_size)
