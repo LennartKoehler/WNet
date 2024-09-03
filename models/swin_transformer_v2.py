@@ -12,6 +12,8 @@ import torch.utils.checkpoint as checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import numpy as np
 
+# patch = token
+
 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
@@ -33,7 +35,7 @@ class Mlp(nn.Module):
 
 
 def window_partition(x, window_size):
-    """
+    """ Split the patches into windows
     Args:
         x: (B, H, W, C)
         window_size (int): window size
@@ -41,18 +43,15 @@ def window_partition(x, window_size):
     Returns:
         windows: (num_windows*B, window_size, window_size, C)
     """
-    B, L, C = x.shape
-    # x = x.view(B, H // window_size, window_size, W // window_size, window_size, C)
-    x = x.view(B, L // window_size, window_size, C)
-
-    # windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
-    windows = x.contiguous().view(-1, window_size, C)
+    B, H, W, C = x.shape
+    x = x.view(B, H // window_size, window_size, W // window_size, window_size, C)
+    windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
 
     return windows
 
 
-def window_reverse(windows, window_size, L):
-    """
+def window_reverse(windows, window_size, H, W):
+    """Reverse the split windows into the original image format
     Args:
         windows: (num_windows*B, window_size, window_size, C)
         window_size (int): Window size
@@ -62,12 +61,10 @@ def window_reverse(windows, window_size, L):
     Returns:
         x: (B, H, W, C)
     """
-    # B = int(windows.shape[0] / (H * W / window_size / window_size))
-    # x = windows.view(B, H // window_size, W // window_size, window_size, window_size, -1)
-    # x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
-    B = int(windows.shape[0] / (L / window_size))
-    x = windows.view(B, L // window_size, window_size, -1)
-    x = x.contiguous().view(B, L, -1)
+    B = int(windows.shape[0] / (H * W / window_size / window_size))
+    x = windows.view(B, H // window_size, W // window_size, window_size, window_size, -1)
+    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
+
     return x
 
 
@@ -100,7 +97,7 @@ class WindowAttention(nn.Module):
         self.cpb_mlp = nn.Sequential(nn.Linear(2, 512, bias=True),
                                      nn.ReLU(inplace=True),
                                      nn.Linear(512, num_heads, bias=False))
-
+        
         # get relative_coords_table
         relative_coords_h = torch.arange(-(self.window_size[0] - 1), self.window_size[0], dtype=torch.float32)
         relative_coords_w = torch.arange(-(self.window_size[1] - 1), self.window_size[1], dtype=torch.float32)
@@ -119,7 +116,7 @@ class WindowAttention(nn.Module):
 
         self.register_buffer("relative_coords_table", relative_coords_table)
 
-        # get pair-wise relative position index for each token inside the window
+        # get pair-wise relative position index for each patch inside the window
         coords_h = torch.arange(self.window_size[0])
         coords_w = torch.arange(self.window_size[1])
         coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
@@ -163,6 +160,7 @@ class WindowAttention(nn.Module):
         logit_scale = torch.clamp(self.logit_scale, max=torch.log(torch.tensor(1. / 0.01))).exp()
         attn = attn * logit_scale
 
+        # positional encoding
         relative_position_bias_table = self.cpb_mlp(self.relative_coords_table).view(-1, self.num_heads)
         relative_position_bias = relative_position_bias_table[self.relative_position_index.view(-1)].view(
             self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1)  # Wh*Ww,Wh*Ww,nH
@@ -332,7 +330,8 @@ class SwinTransformerBlock(nn.Module):
 
 
 class PatchMerging(nn.Module):
-    r""" Patch Merging Layer.
+    r""" reduce the size of the image to h/2, w/2 but increase the number of channels by 2
+    Patch Merging Layer.
 
     Args:
         input_resolution (tuple[int]): Resolution of input feature.
@@ -343,8 +342,8 @@ class PatchMerging(nn.Module):
     def __init__(self, input_resolution, dim, norm_layer=nn.LayerNorm):
         super().__init__()
         self.input_resolution = input_resolution
-        self.dim = dim
-        self.reduction = nn.Linear(4 * dim, 2 * dim, bias=False)
+        self.dim = dim # dim = C
+        self.reduction = nn.Linear(4 * dim, 2 * dim, bias=False) # reduce number of channels(dims)
         self.norm = norm_layer(2 * dim)
 
     def forward(self, x):
@@ -365,7 +364,7 @@ class PatchMerging(nn.Module):
         x = torch.cat([x0, x1, x2, x3], -1)  # B H/2 W/2 4*C
         x = x.view(B, -1, 4 * C)  # B H/2*W/2 4*C
 
-        x = self.reduction(x)
+        x = self.reduction(x) # B H/2 W/2 4*C -> B H/2 W/2 2*C
         x = self.norm(x)
 
         return x
@@ -437,7 +436,7 @@ class BasicLayer(nn.Module):
             else:
                 x = blk(x)
         if self.downsample is not None:
-            x = self.downsample(x)
+            x = self.downsample(x) # patchmerging
         return x
 
     def extra_repr(self) -> str:
@@ -460,7 +459,8 @@ class BasicLayer(nn.Module):
 
 
 class PatchEmbed(nn.Module):
-    r""" Image to Patch Embedding
+    r""" Create patches from image by doing a simple 2d convolution with the kernelsize being the patch size
+    Image to Patch Embedding
 
     Args:
         img_size (int): Image size.  Default: 224.
@@ -549,7 +549,7 @@ class SwinTransformerV2(nn.Module):
         self.num_features = int(embed_dim * 2 ** (self.num_layers - 1))
         self.mlp_ratio = mlp_ratio
 
-        # split image into non-overlapping patches
+        # split image into non-overlapping patches, this only has to be done at the beginning, the following patches come from patchmerging
         self.patch_embed = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim,
             norm_layer=norm_layer if self.patch_norm else None)
@@ -581,7 +581,7 @@ class SwinTransformerV2(nn.Module):
                                drop=drop_rate, attn_drop=attn_drop_rate,
                                drop_path=dpr[sum(depths[:i_layer]):sum(depths[:i_layer + 1])],
                                norm_layer=norm_layer,
-                               downsample=PatchMerging if (i_layer < self.num_layers - 1) else None,
+                               downsample=PatchMerging if (i_layer < self.num_layers - 1) else None, # patch merging always except for last layer
                                use_checkpoint=use_checkpoint,
                                pretrained_window_size=pretrained_window_sizes[i_layer])
             self.layers.append(layer)

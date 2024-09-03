@@ -101,7 +101,7 @@ def window_reverse(windows, window_size, L):
 
 
 class WindowAttention(nn.Module):
-    r""" Window based multi-head self attention (W-MSA) module with relative position bias.
+    """ Window based multi-head self attention (W-MSA) module with relative position bias.
     It supports both of shifted and non-shifted window.
 
     Args:
@@ -130,6 +130,7 @@ class WindowAttention(nn.Module):
                                      nn.ReLU(inplace=True),
                                      nn.Linear(512, num_heads, bias=False))
 
+        #positional embedding
         # get relative_coords_table
         relative_coords_w = torch.arange(-(self.window_size - 1), self.window_size, dtype=torch.float32)
         relative_coords_table = relative_coords_w  # 2*W-1
@@ -152,6 +153,8 @@ class WindowAttention(nn.Module):
         # [3, 2, 1]
         # [4, 3, 2]
         self.register_buffer("relative_position_index", relative_coords)  # (W, W): range of 0 -- 2*(W-1)
+
+
 
         self.qkv = nn.Linear(dim, dim * 3, bias=False)
         if qkv_bias:
@@ -185,6 +188,7 @@ class WindowAttention(nn.Module):
         logit_scale = torch.clamp(self.logit_scale, max=torch.log(torch.tensor(1. / 0.01, device=device))).exp()
         attn = attn * logit_scale
 
+        #positional embedding
         relative_position_bias_table = self.cpb_mlp(self.relative_coords_table)  # (2*W-1, nH)
         relative_position_bias = relative_position_bias_table[self.relative_position_index.view(-1)].view(
             self.window_size, self.window_size, -1)  # (W, W, nH)
