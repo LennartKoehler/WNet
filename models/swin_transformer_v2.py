@@ -13,7 +13,9 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import numpy as np
 
 # patch = token
-
+"""
+Probably not useful for my case because I can actually use overlap in my data, and dont need to simulate it by shifting windows
+"""
 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
@@ -147,16 +149,16 @@ class WindowAttention(nn.Module):
             x: input features with shape of (num_windows*B, seq_length, C) seq_len = window_size*window_size
             mask: (0/-inf) mask with shape of (num_windows, Wh*Ww, Wh*Ww) or None
         """
-        B_, N, C = x.shape
+        B_, N, C = x.shape # B_ = B*nW
         qkv_bias = None
         if self.q_bias is not None:
             qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
         qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias) # qkv has embedding_dimension=number_channels
-        qkv = qkv.reshape(B_, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4) # (B_, num_heads, N, C) 
+        qkv = qkv.reshape(B_, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4) # (3(q,k,v), B_, num_heads, N, C) 
         q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
 
         # cosine attention
-        attn = (F.normalize(q, dim=-1) @ F.normalize(k, dim=-1).transpose(-2, -1))
+        attn = (F.normalize(q, dim=-1) @ F.normalize(k, dim=-1).transpose(-2, -1)) # (B_, num_heads, N, N)
         logit_scale = torch.clamp(self.logit_scale, max=torch.log(torch.tensor(1. / 0.01))).exp()
         attn = attn * logit_scale
 
@@ -171,8 +173,8 @@ class WindowAttention(nn.Module):
 
         if mask is not None:
             nW = mask.shape[0]
-            attn = attn.view(B_ // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
-            attn = attn.view(-1, self.num_heads, N, N)
+            attn = attn.view(B_ // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0) # B_ -> B, nW (and then add mask)
+            attn = attn.view(-1, self.num_heads, N, N) # B, nW -> B
             attn = self.softmax(attn)
         else:
             attn = self.softmax(attn)
@@ -249,7 +251,15 @@ class SwinTransformerBlock(nn.Module):
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
         if self.shift_size > 0:
-            # calculate attention mask for SW-MSA
+            """ calculate attention mask for SW-MSA
+            creates new windows which are shifted by shift_size
+            if these new windows ge beond the edge of the image, then the interactions in the attention mechanism
+            need to be removed because these pixels aren't connected in the picture
+            this is done by setting the attentinon mask values of these connections to -100
+            by adding this mask to the attn values before softmax, these values will be set to 0 after softmax
+
+            """
+
             H, W = self.input_resolution
             img_mask = torch.zeros((1, H, W, 1))  # 1 H W 1
             h_slices = (slice(0, -self.window_size),
@@ -263,19 +273,10 @@ class SwinTransformerBlock(nn.Module):
                 for w in w_slices:
                     img_mask[:, h, w, :] = cnt
                     cnt += 1
-            print(img_mask[0,:,:,0])
             mask_windows = window_partition(img_mask, self.window_size)  # nW, window_size, window_size, 1
-            print(mask_windows[3,:,:,0])
-
             mask_windows = mask_windows.view(-1, self.window_size * self.window_size)
-            print(mask_windows[3,:])
-
             attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
-            print(mask_windows.shape)
-            print(attn_mask[3,:,:])
             attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
-            print(attn_mask)
-            print(attn_mask.unsqueeze(1).unsqueeze(0).shape)
         else:
             attn_mask = None
 
@@ -291,6 +292,7 @@ class SwinTransformerBlock(nn.Module):
         x = x.view(B, H, W, C)
 
         # cyclic shift
+        # for these shifted value the mask is needed, because now pixels are next to each other which are on oposite sides of the picture (e.g. top and bottom)
         if self.shift_size > 0:
             shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
         else:
