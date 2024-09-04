@@ -74,4 +74,5 @@ def plot_classification(model, data_batch):
     plt.show()
 
 if __name__ == '__main__':
+    
     test()
