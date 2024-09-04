@@ -93,7 +93,7 @@ class WindowAttention(nn.Module):
 
         self.logit_scale = nn.Parameter(torch.log(10 * torch.ones((num_heads, 1, 1))), requires_grad=True)
 
-        # mlp to generate continuous relative position bias
+        # mlp to generate continuous relative position bias for each head
         self.cpb_mlp = nn.Sequential(nn.Linear(2, 512, bias=True),
                                      nn.ReLU(inplace=True),
                                      nn.Linear(512, num_heads, bias=False))
@@ -112,7 +112,7 @@ class WindowAttention(nn.Module):
             relative_coords_table[:, :, :, 1] /= (self.window_size[1] - 1)
         relative_coords_table *= 8  # normalize to -8, 8
         relative_coords_table = torch.sign(relative_coords_table) * torch.log2(
-            torch.abs(relative_coords_table) + 1.0) / np.log2(8)
+            torch.abs(relative_coords_table) + 1.0) / np.log2(8) # why this?
 
         self.register_buffer("relative_coords_table", relative_coords_table)
 
@@ -144,15 +144,15 @@ class WindowAttention(nn.Module):
     def forward(self, x, mask=None):
         """
         Args:
-            x: input features with shape of (num_windows*B, N, C)
+            x: input features with shape of (num_windows*B, seq_length, C) seq_len = window_size*window_size
             mask: (0/-inf) mask with shape of (num_windows, Wh*Ww, Wh*Ww) or None
         """
         B_, N, C = x.shape
         qkv_bias = None
         if self.q_bias is not None:
             qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
-        qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
-        qkv = qkv.reshape(B_, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
+        qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias) # qkv has embedding_dimension=number_channels
+        qkv = qkv.reshape(B_, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4) # (B_, num_heads, N, C) 
         q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
 
         # cosine attention
@@ -166,6 +166,7 @@ class WindowAttention(nn.Module):
             self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1)  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
         relative_position_bias = 16 * torch.sigmoid(relative_position_bias)
+
         attn = attn + relative_position_bias.unsqueeze(0)
 
         if mask is not None:
@@ -234,7 +235,7 @@ class SwinTransformerBlock(nn.Module):
             # if window size is larger than input resolution, we don't partition windows
             self.shift_size = 0
             self.window_size = min(self.input_resolution)
-        assert 0 <= self.shift_size < self.window_size, "shift_size must in 0-window_size"
+        assert 0 <= self.shift_size < self.window_size, f"shift_size ({self.shift_size}) must in 0-window_size (window_size = {self.window_size})"
 
         self.norm1 = norm_layer(dim)
         self.attn = WindowAttention(
@@ -262,17 +263,26 @@ class SwinTransformerBlock(nn.Module):
                 for w in w_slices:
                     img_mask[:, h, w, :] = cnt
                     cnt += 1
-
+            print(img_mask[0,:,:,0])
             mask_windows = window_partition(img_mask, self.window_size)  # nW, window_size, window_size, 1
+            print(mask_windows[3,:,:,0])
+
             mask_windows = mask_windows.view(-1, self.window_size * self.window_size)
+            print(mask_windows[3,:])
+
             attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
+            print(mask_windows.shape)
+            print(attn_mask[3,:,:])
             attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
+            print(attn_mask)
+            print(attn_mask.unsqueeze(1).unsqueeze(0).shape)
         else:
             attn_mask = None
 
         self.register_buffer("attn_mask", attn_mask)
 
     def forward(self, x):
+        # input: (B, L, C)
         H, W = self.input_resolution
         B, L, C = x.shape
         assert L == H * W, "input feature has wrong size"
