@@ -18,7 +18,7 @@ from utils.soft_n_cut_loss import soft_n_cut_loss
 
 from data import ReadDataset
 #import WNet_attention as WNet
-import WNet
+import models.WNet as WNet
 import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description='PyTorch Unsupervised Segmentation with WNet')

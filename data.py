@@ -11,6 +11,7 @@ import os
 
 class ReadData:
     def __init__(self, file_name):
+        # metadata
         self.file_name = file_name
         self.read_name = file_name.split("/")[-1][:-6]
         self.h5_file = h5py.File(file_name, "r")
@@ -20,6 +21,7 @@ class ReadData:
         self.digitisation = self.h5_file["UniqueGlobalKey"]["channel_id"].attrs["digitisation"]
         self.range = self.h5_file["UniqueGlobalKey"]["channel_id"].attrs["range"]
 
+        #signal
         self.signal = self.h5_file["Raw"]["Reads"][read_number]["Signal"][:]
         self.signal = self.scale_to_pA(self.signal)
         self.signal = self.z_norm(self.signal)
@@ -56,10 +58,10 @@ class ReadData:
 
 
 
-def write_data_file(root_dir, segment_length, segment_overlap, out_file):
+def write_data_file(root_dir, segment_length, segment_overlap, number_segments, out_file):
     h5_file = h5py.File(out_file, "w")
 
-    for file_name in os.listdir(root_dir)[:50]:
+    for file_name in os.listdir(root_dir)[:number_segments]:
         try:
             file = os.path.join(root_dir, file_name)
             read = ReadData(file)
@@ -95,5 +97,5 @@ class ReadDataset(Dataset):
     
 
 if __name__ == "__main__":
-    # write_data_file("/home/lennart/Projektmodul/ecoli/tombo/fast5_files_gzip",256,20,"data_segments_reduced.h5")
-    print(len(h5py.File("data_segments_reduced.h5", "r")))
+    write_data_file("/home/lennart/Projektmodul/ecoli/tombo/fast5_files_gzip", 256, 20, -1, "data_segments_all_4000_reads.h5")
+    print(len(h5py.File("data_segments_all_4000_reads.h5", "r")))

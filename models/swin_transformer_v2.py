@@ -298,7 +298,9 @@ class SwinTransformerBlock(nn.Module):
         else:
             shifted_x = x
 
-        # partition windows
+        # partition windows, windows are now treated as batches, therefore each swin transformer block only has one set of weights
+        # this block is then applied to each window with the same weights
+        
         x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
         x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
 
