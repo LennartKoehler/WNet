@@ -181,9 +181,8 @@ class WindowAttention(nn.Module):
         if self.q_bias is not None:
             qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
         qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
-        qkv = qkv.reshape(B_, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4) # (B_, num_heads, N, channels) 
+        qkv = qkv.reshape(B_, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4) # (3, B_, num_heads, N, channels) # channels = C/num_heads
         q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
-
         # cosine attention
         attn = (F.normalize(q, dim=-1) @ F.normalize(k, dim=-1).transpose(-2, -1)) 
         logit_scale = torch.clamp(self.logit_scale, max=torch.log(torch.tensor(1. / 0.01, device=device))).exp()
@@ -259,10 +258,10 @@ class SwinTransformerBlock(nn.Module):
         self.window_size = window_size
         self.shift_size = shift_size
         self.mlp_ratio = mlp_ratio
-        if min(self.input_resolution) <= self.window_size:
+        if self.input_resolution <= self.window_size:
             # if window size is larger than input resolution, we don't partition windows
             self.shift_size = 0
-            self.window_size = min(self.input_resolution)
+            self.window_size = self.input_resolution
         assert 0 <= self.shift_size < self.window_size, "shift_size must in 0-window_size"
 
         self.norm1 = norm_layer(dim)
@@ -277,26 +276,23 @@ class SwinTransformerBlock(nn.Module):
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
         if self.shift_size > 0:
-            # calculate attention mask for SW-MSA
-            H, W = self.input_resolution
+            
+            # calculate 1D attention mask for SW-MSA
+            L = self.input_resolution
             img_mask = torch.zeros((1, L, 1))  # 1 H W 1
-            h_slices = (slice(0, -self.window_size),
+            slices = (slice(0, -self.window_size),
                         slice(-self.window_size, -self.shift_size),
                         slice(-self.shift_size, None))
-            w_slices = (slice(0, -self.window_size),
-                        slice(-self.window_size, -self.shift_size),
-                        slice(-self.shift_size, None))
-            cnt = 0
-            for h in h_slices:
-                for w in w_slices:
-                    img_mask[:, h, w, :] = cnt
-                    cnt += 1
 
-            mask_windows = window_partition(img_mask, self.window_size)  # nW, window_size, window_size, 1
-            mask_windows = mask_windows.view(-1, self.window_size * self.window_size)
+            cnt = 0
+            for s in slices:
+                img_mask[:, s, :] = cnt
+                cnt += 1
+
+            mask_windows = window_partition(img_mask, self.window_size)  # nW, window_size, 1
+            mask_windows = mask_windows.view(-1, self.window_size)
             attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
             attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
-
 
         else:
             attn_mask = None
@@ -308,11 +304,11 @@ class SwinTransformerBlock(nn.Module):
         assert L % self.window_size == 0, f'input length ({L}) must be divisible by window size ({self.window_size})'
 
         shortcut = x
-
         # zero-padding shift
         if self.shift_size > 0:
             shifted_x = torch.roll(x, shifts=-self.shift_size, dims=1)
-            shifted_x[:, -self.shift_size:] = 0.
+            # shifted_x[:, -self.shift_size:] = 0. # do i need the zero padding? I use a attention mask
+
         else:
             shifted_x = x
 
@@ -328,7 +324,7 @@ class SwinTransformerBlock(nn.Module):
         # reverse cyclic shift
         if self.shift_size > 0:
             x = torch.roll(shifted_x, shifts=self.shift_size, dims=1)
-            x[:, :self.shift_size] = 0.  # remove invalid embs
+            # x[:, :self.shift_size] = 0.  # remove invalid embs
         else:
             x = shifted_x
 
@@ -420,7 +416,10 @@ class BasicLayer(nn.Module):
                 x = checkpoint.checkpoint(blk, x)
             else:
                 x = blk(x)
+        if self.downsample is not None:
+            x = self.downsample(x)
         return x
+    
 
     def extra_repr(self) -> str:
         return f"dim={self.dim}, depth={self.depth}, num_heads={self.num_heads}, window_size={self.window_size}"
@@ -475,26 +474,18 @@ class PatchMerging(nn.Module):
         super().__init__()
         self.input_resolution = input_resolution
         self.dim = dim # dim = C
-        self.reduction = nn.Linear(4 * dim, 2 * dim, bias=False) # reduce number of channels(dims)
         self.norm = norm_layer(2 * dim)
 
     def forward(self, x):
         """
         x: B, H*W, C
         """
-        L_in = self.input_resolution
         B, L, C = x.shape
-        # assert L == H * W, "input feature has wrong size"
-        # assert H % 2 == 0 and W % 2 == 0, f"x size ({H}*{W}) are not even."
 
-        x = x.view(B, L, C)
-
-        x0 = x[:, 0::2, :]  # B H/2 W/2 C
-        x1 = x[:, 1::2, :]  # B H/2 W/2 
-        x = torch.cat([x0, x1], -1)  # B H/2 W/2 4*C
-        x = x.view(B, -1, 4 * C)  # B H/2*W/2 4*C
-
-        x = self.reduction(x) # B H/2 W/2 4*C -> B H/2 W/2 2*C
+        x0 = x[:, 0::2, :]
+        x1 = x[:, 1::2, :]  
+        x = torch.cat([x0, x1], -1)
+        x = x.view(B, -1, 2 * C)
         x = self.norm(x)
 
         return x
