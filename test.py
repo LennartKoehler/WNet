@@ -32,7 +32,7 @@ import models.W_swintransformer as Wswin
 
 x = np.array([[1,2,3,4,5],[6,7,8,9,10],[11,12,13,14,15]])
 
-swin_transformer = Wswin.U_swintransformer(img_size=256,
+swin_transformer = Wswin.W_swintransformer(img_size=256,
                                        patch_size=4,
                                        in_chans=1,
                                        depths_enc=[2, 2, 6],
@@ -51,6 +51,7 @@ swin_transformer = Wswin.U_swintransformer(img_size=256,
                                        use_checkpoint=False,
                                        pretrained_window_sizes=[0, 0, 0, 0, 0])
 tensor = torch.arange(0, 256)[None,None,:].float()
+swin_transformer(tensor)
 model_parameters = filter(lambda p: p.requires_grad, swin_transformer.parameters())
 params = sum([np.prod(p.size()) for p in model_parameters])
 print("Number of trainable parameters: ", params)

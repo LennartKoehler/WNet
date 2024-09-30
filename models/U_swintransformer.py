@@ -1,10 +1,16 @@
-from models.U_swintransformer import U_swintransformer, UncompatibleInputException
+ 
+import models.swin_transformer_v2_1d as st1d
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-class W_swintransformer(nn.Module):
+class UncompatibleInputException(Exception):
+    pass
+
+# no pretrained windows
+
+class U_swintransformer(nn.Module):
     def __init__(self,
             num_classes=100,
             embed_dim=96,
@@ -34,20 +40,14 @@ class W_swintransformer(nn.Module):
         if len(depths_enc) != len(depths_dec)-1:
             raise UncompatibleInputException("depths_enc must be one layer shorter than depths_dec to make sure input shape equals output shape")
                                              
-        '''
-        Both U_swintransformers are the same except for input and output, but the layers are the same
-        TODO maybe use skip connections
-        TODO get num_classes to normal dimension after first U_net
-        '''
-        self.enc = U_swintransformer(img_size=img_size,
+
+        self.enc = st1d.SwinTransformerV21D(img_size=img_size,
             patch_size=patch_size,
             in_chans=in_chans,
             num_classes=num_classes,
             embed_dim=embed_dim,
-            depths_enc=depths_enc,
-            num_heads_enc=num_heads_enc,
-            depths_dec=depths_dec,
-            num_heads_dec=num_heads_dec,
+            depths=depths_enc,
+            num_heads=num_heads_enc,
             window_size=window_size,
             mlp_ratio=mlp_ratio,
             qkv_bias=qkv_bias,
@@ -60,21 +60,16 @@ class W_swintransformer(nn.Module):
             use_checkpoint=use_checkpoint,
             pretrained_window_sizes=pretrained_window_sizes)
         
-        self.middle_dim = self.enc.out_channels
+        self.middle_channels = self.enc.out_channels
         self.middle_resolution = self.enc.out_resolution
 
-        self.match_channels = nn.Linear(self.middle_dim, embed_dim, bias = False)
-
-
-        self.dec = U_swintransformer(img_size=self.middle_resolution,
+        self.dec = st1d.SwinTransformerV21D_reverse(img_size=self.middle_resolution,
             patch_size=patch_size,
-            in_chans=embed_dim,
-            num_classes=in_chans, # output = input
-            embed_dim=embed_dim,
-            depths_enc=depths_enc,
-            num_heads_enc=num_heads_enc,
-            depths_dec=depths_dec,
-            num_heads_dec=num_heads_dec,
+            in_chans=self.middle_channels,
+            num_classes=num_classes,
+            embed_dim=self.middle_channels,
+            depths=depths_dec,
+            num_heads=num_heads_dec,
             window_size=window_size,
             mlp_ratio=mlp_ratio,
             qkv_bias=qkv_bias,
@@ -86,21 +81,15 @@ class W_swintransformer(nn.Module):
             patch_norm=patch_norm,
             use_checkpoint=use_checkpoint,
             pretrained_window_sizes=pretrained_window_sizes)
-
-        self.out_dim = self.dec.out_channels
+        
+        self.out_channels = self.dec.out_channels
         self.out_resolution = self.dec.out_resolution
+
     def forward(self, x, returns='both'):
-        enc = self.enc(x, "dec")
+        enc = self.enc(x)
         if returns == "enc":
             return enc
-        
-        enc_ = F.softmax(enc,1) # softmax necessary?
-        enc_ = enc_.transpose(1,2)
-        enc_ = self.match_channels(enc_)
-        enc_ = enc_.transpose(1,2) # have to transpose back and forth to fit the linear dimensionality
-        
-        dec = self.dec(enc_, "dec")
-        print(enc.shape, dec.shape)
+        dec = self.dec(F.softmax(enc, 1))
         if returns == "dec":
             return dec
         if returns == "both":

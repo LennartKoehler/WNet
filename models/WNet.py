@@ -177,7 +177,7 @@ class WNet(nn.Module):
         if returns=='enc':
             return enc
         
-        dec=self.UDec(F.softmax(enc, 1))
+        dec=self.UDec(F.softmax(enc, 1)) # FIXME softmax necessary here?
         
         if returns=='dec':
             return dec
