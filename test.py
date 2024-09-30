@@ -51,7 +51,8 @@ swin_transformer = Wswin.U_swintransformer(img_size=256,
                                        use_checkpoint=False,
                                        pretrained_window_sizes=[0, 0, 0, 0, 0])
 tensor = torch.arange(0, 256)[None,None,:].float()
-
-print(swin_transformer(tensor)[1].shape)
+model_parameters = filter(lambda p: p.requires_grad, swin_transformer.parameters())
+params = sum([np.prod(p.size()) for p in model_parameters])
+print("Number of trainable parameters: ", params)
 
 

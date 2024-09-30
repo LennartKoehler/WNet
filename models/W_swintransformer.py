@@ -3,6 +3,7 @@ import models.swin_transformer_v2_1d_reverse as st1d
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 class UncompatibleInputException(Exception):
     pass
@@ -94,4 +95,3 @@ class U_swintransformer(nn.Module):
             return dec
         if returns == "both":
             return enc, dec
-    
