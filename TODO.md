@@ -1,0 +1,3 @@
+- skip connections greatly influence the performance
+- think about if skip connection of raw input is smart, maybe transformer raw input then patch embed?
+- how many segments do we want? have to train with fixed number of classes

@@ -20,6 +20,7 @@ from data import ReadDataset
 #import WNet_attention as WNet
 import models.WNet as WNet
 import matplotlib.pyplot as plt
+import models.W_swintransformer as W_swintransformer
 
 parser = argparse.ArgumentParser(description='PyTorch Unsupervised Segmentation with WNet')
 parser.add_argument('--name', metavar='name', default=str(datetime.datetime.now().strftime('%Y%m%d%H%M%S')), type=str,
@@ -44,11 +45,12 @@ criterionIdt = torch.nn.MSELoss()
 
 def train_op(model, optimizer, input, k, img_size, psi=0.5): # model = WNet
     enc = model(input, returns='enc')
-    # d = enc.clone().detach()
+    d = enc.clone().detach()
     n_cut_loss=soft_n_cut_loss(input,  softmax(enc),  img_size)
     n_cut_loss.backward()
     optimizer.step()
     optimizer.zero_grad()
+    # n_cut_loss = torch.tensor(1)
 
 
     dec = model(input, returns='dec')
@@ -56,7 +58,7 @@ def train_op(model, optimizer, input, k, img_size, psi=0.5): # model = WNet
     rec_loss.backward()
     optimizer.step()
     optimizer.zero_grad()
-    # rec_loss = torch.tensor(1)
+    #rec_loss = torch.tensor(1)
     return (model, n_cut_loss, rec_loss)
 
 def reconstruction_loss(x, x_prime):
@@ -85,11 +87,30 @@ def train_single_image():
     # squeeze = args.squeeze
     squeeze = 2
     img_size = 256
-    wnet = WNet.WNet(squeeze, in_chans=1)
+    # wnet = WNet.WNet(squeeze=squeeze, in_chans=1)
+    wnet = W_swintransformer.W_swintransformer(num_classes=squeeze,
+            embed_dim=96,
+            img_size=img_size,
+            patch_size=2,
+            in_chans=1,
+            depths_enc=[2, 2, 2],
+            num_heads_enc=[3, 6, 12],
+            depths_dec=[2, 2, 2],
+            num_heads_dec=[12, 6, 3],
+            window_size=8, mlp_ratio=4.,
+            qkv_bias=True,
+            drop_rate=0.,
+            attn_drop_rate=0.,
+            drop_path_rate=0.1,
+            norm_layer=nn.LayerNorm,
+            ape=False,
+            patch_norm=True,
+            use_checkpoint=False,
+            pretrained_window_sizes=[0, 0, 0])
     if(CUDA):
         wnet = wnet.cuda()
     # learning_rate = 0.003
-    learning_rate = 0.01
+    learning_rate = 0.003
     optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
 
     n_cut_losses = []
@@ -120,7 +141,7 @@ def train_single_image():
     n_cut_losses_avg.append(torch.mean(torch.FloatTensor(n_cut_losses)))
     rec_losses_avg.append(torch.mean(torch.FloatTensor(rec_losses)))
     print("--- %s seconds ---" % (time.time() - start_time))
-    torch.save(wnet.state_dict(), "wnet_state_dict_with_rec_loss_500_epoch.pkl")
+    torch.save(wnet.state_dict(), "w_swin_state_dict_with_rec_loss_500_epoch.pkl")
 
 
 
@@ -205,7 +226,7 @@ def main():
     print("Done")
 
 if __name__ == '__main__':
-    main()
+    train_single_image()
 
 
 

@@ -6,8 +6,9 @@ Created on Mon Oct 15 20:36:27 2018
 """
 
 import train
-import WNet
-import WNet_attention
+import models.WNet as WNet
+import models.WNet_attention as WNet_attention
+import models.W_swintransformer as W_swintransformer
 import torch
 import numpy as np
 from data import ReadDataset
@@ -61,8 +62,8 @@ def test():
         data1 = ReadDataset("data_segments_reduced.h5")[i][None, :]
         data2 = ReadDataset("data_segments_reduced.h5")[i+1][None, :]
         data_batch = torch.cat((data1, data2), 0)
-        wnet = WNet.WNet(10)
-        wnet.load_state_dict(torch.load("models/model_test_orig"))
+        wnet = W_swintransformer(10)
+        wnet.load_state_dict(torch.load("w_swin_state_dict_with_rec_loss_500_epoch.pkl"))
         plot_classification(wnet, data_batch)
 
 def plot_classification(model, data_batch):
@@ -82,4 +83,4 @@ def plot_loss():
     plt.show()
 
 if __name__ == '__main__':
-    plot_loss()
+    test()
