@@ -76,22 +76,37 @@ def write_data_file(root_dir, segment_length, segment_overlap, number_segments, 
 
 #---------------------------------------------------------#
 
-        
-# used for the pytorch dataloader
-class ReadDataset(Dataset):
+class H5Dataset(torch.utils.data.Dataset):
+    def __init__(self, path):
+        self.file_path = path
+        self.dataset = None
 
-    def __init__(self, h5_file_name, transform=None):
-        self.h5_file = h5py.File(h5_file_name, "r")
-        self.transform = transform
-        self.segment_names = list(self.h5_file.keys())
+        with h5py.File(self.file_path, 'r') as file:
+            self.segment_names = list(file.keys())
 
+    def __getitem__(self, index):
+        if self.dataset is None:
+            self.dataset = h5py.File(self.file_path, 'r')
+        signal = self.dataset[self.segment_names[index]][:]
+        return torch.from_numpy(signal).float().unsqueeze(0)# unsqueeze: add channel axis
 
     def __len__(self):
         return len(self.segment_names)
+# # used for the pytorch dataloader
+# class ReadDataset(Dataset):
+
+#     def __init__(self, h5_file_name, transform=None):
+#         self.h5_file = h5py.File(h5_file_name, "r")
+#         self.transform = transform
+#         self.segment_names = list(self.h5_file.keys())
+
+
+#     def __len__(self):
+#         return len(self.segment_names)
     
-    def __getitem__(self, idx):
-        signal = self.h5_file[self.segment_names[idx]][:]
-        return torch.from_numpy(signal).float().unsqueeze(0) # unsqueeze: add channel axis
+#     def __getitem__(self, idx):
+#         signal = self.h5_file[self.segment_names[idx]][:]
+#         return torch.from_numpy(signal).float().unsqueeze(0) # unsqueeze: add channel axis
     
 
     
