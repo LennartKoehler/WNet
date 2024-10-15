@@ -45,7 +45,6 @@ criterionIdt = torch.nn.MSELoss()
 
 def train_op(model, optimizer, input, k, img_size, psi=0.5): # model = WNet
     enc = model(input, returns='enc')
-    d = enc.clone().detach()
     n_cut_loss=soft_n_cut_loss(input,  softmax(enc),  img_size)
     n_cut_loss.backward()
     optimizer.step()
@@ -200,9 +199,6 @@ def main():
             wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, batch, 1, img_size)
             n_cut_losses.append(n_cut_loss.detach())
             rec_losses.append(rec_loss.detach())
-            if idx%10==0:
-                print(f"n_cut_loss: {n_cut_loss.item()}")
-                print(f"rec_loss: {rec_loss.item()} \n")
 
 
 

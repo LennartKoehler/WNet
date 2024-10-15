@@ -1,4 +1,4 @@
-from swin_transformer_v2_1d_functionality import *
+from models.swin_transformer_v2_1d_functionality import *
 
 
 

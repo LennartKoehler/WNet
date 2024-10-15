@@ -1,5 +1,4 @@
-from U_swintransformer import U_swintransformer
-import torch
+from models.U_swintransformer import U_swintransformer
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
@@ -7,7 +6,7 @@ import numpy as np
 class UncompatibleInputException(Exception):
     pass
 
-class W_swintransformer(nn.Module):
+class W_swintransformer(nn.Module):    
     def __init__(self,
             num_classes=100,
             embed_dim=96,
@@ -15,7 +14,7 @@ class W_swintransformer(nn.Module):
             patch_size=2,
             in_chans=1,
             depths_enc=[2, 2, 2],
-            num_heads_enc=[3, 6, 12],
+            num_heads_enc=[2, 6, 12],
             depths_dec=[2, 2, 2],
             num_heads_dec=[12, 6, 3],
             window_size=8, mlp_ratio=4.,
