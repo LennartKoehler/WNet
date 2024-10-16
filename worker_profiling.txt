@@ -39,3 +39,26 @@ number_workers:8, time: 7.48016095161438
 number_workers:10, time: 7.472046375274658
 number_workers:12, time: 7.32419228553772
 number_workers:14, time: 7.0865819454193115
+
+ batch_size=40
+number_workers:0, time: 9.283146858215332
+number_workers:2, time: 7.506619215011597
+number_workers:4, time: 7.496507167816162
+number_workers:6, time: 7.464169025421143
+number_workers:8, time: 7.568403959274292
+number_workers:10, time: 7.968617916107178
+number_workers:12, time: 7.26918888092041
+
+ batch_size=40
+
+ batch_size=40
+
+ batch_size=40
+
+ batch_size=40
+
+ batch_size=40
+
+ batch_size=40
+
+ batch_size=40
