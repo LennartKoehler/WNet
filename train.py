@@ -45,7 +45,6 @@ criterionIdt = torch.nn.MSELoss()
 
 def train_op(model, optimizer, input, k, img_size, psi=0.5): # model = WNet
     enc = model(input, returns='enc')
-    d = enc.clone().detach()
     n_cut_loss=soft_n_cut_loss(input,  softmax(enc),  img_size)
     n_cut_loss.backward()
     optimizer.step()
@@ -117,8 +116,8 @@ def train_single_image():
     rec_losses = []
     start_time = time.time()
 
-    data1 = ReadDataset("data_segments_reduced.h5")[0][None, :]
-    data2 = ReadDataset("data_segments_reduced.h5")[1][None, :]
+    data1 = H5Dataset("data_segments_reduced.h5")[0][None, :]
+    data2 = H5Dataset("data_segments_reduced.h5")[1][None, :]
     data_batch = torch.cat((data1, data2), 0)
 
 

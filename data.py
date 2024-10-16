@@ -1,5 +1,4 @@
 import torch
-from torch.utils.data import Dataset
 import numpy as np
 import pickle
 
@@ -95,21 +94,23 @@ class H5Dataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.segment_names)
-# # used for the pytorch dataloader
-# class ReadDataset(Dataset):
-
-#     def __init__(self, h5_file_name, transform=None):
-#         self.h5_file = h5py.File(h5_file_name, "r")
-#         self.transform = transform
-#         self.segment_names = list(self.h5_file.keys())
-
-
-#     def __len__(self):
-#         return len(self.segment_names)
     
-#     def __getitem__(self, idx):
-#         signal = self.h5_file[self.segment_names[idx]][:]
-#         return torch.from_numpy(signal).float().unsqueeze(0) # unsqueeze: add channel axis
+
+# used for the pytorch dataloader
+class H5Dataset_old(torch.utils.data.Dataset):
+
+    def __init__(self, h5_file_name, transform=None):
+        self.h5_file = h5py.File(h5_file_name, "r")
+        self.transform = transform
+        self.segment_names = list(self.h5_file.keys())
+
+
+    def __len__(self):
+        return len(self.segment_names)
+    
+    def __getitem__(self, idx):
+        signal = self.h5_file[self.segment_names[idx]][:]
+        return torch.from_numpy(signal).float().unsqueeze(0) # unsqueeze: add channel axis
     
 
     
