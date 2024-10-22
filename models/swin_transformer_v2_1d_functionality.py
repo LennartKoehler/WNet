@@ -499,11 +499,8 @@ class PatchSeperating(nn.Module):
         """
         B, L, C = x.shape
 
-        x0 = x[:, :, 0::2]
-        x1 = x[:, :, 1::2]
-        x = torch.empty((B, 2*L, C//2))
-        x[:, 0::2, :] = x0
-        x[:, 1::2, :] = x1
+        z = torch.flatten(x, start_dim = 1, end_dim = 2)
+        z = z.view(B, 2*C, -1)
 
         x = self.norm(x)
 
