@@ -22,6 +22,10 @@ import models.WNet as WNet
 import matplotlib.pyplot as plt
 import models.W_swintransformer as W_swintransformer
 
+import os
+
+os.environ['OMP_THREAD_LIMIT'] = '4'
+
 parser = argparse.ArgumentParser(description='PyTorch Unsupervised Segmentation with WNet')
 parser.add_argument('--name', metavar='name', default=str(datetime.datetime.now().strftime('%Y%m%d%H%M%S')), type=str,
                     help='Name of model')
@@ -84,9 +88,10 @@ def train_single_image():
 
     # Squeeze k
     # squeeze = args.squeeze
-    squeeze = 2
+    squeeze = 10
     img_size = 256
-    # wnet = WNet.WNet(squeeze=squeeze, in_chans=1)
+    wnet = WNet.WNet(squeeze=squeeze, in_chans=1)
+    '''
     wnet = W_swintransformer.W_swintransformer(num_classes=squeeze,
             embed_dim=96,
             img_size=img_size,
@@ -105,7 +110,7 @@ def train_single_image():
             ape=False,
             patch_norm=True,
             use_checkpoint=False,
-            pretrained_window_sizes=[0, 0, 0])
+            pretrained_window_sizes=[0, 0, 0])'''
     if(CUDA):
         wnet = wnet.cuda()
     # learning_rate = 0.003
@@ -161,12 +166,33 @@ def main(prof):
     #------------------Parameters-----------------
     squeeze = 10
     img_size = 256
-    wnet = WNet.WNet(squeeze, in_chans=1)
+
+
+    wnet = W_swintransformer.W_swintransformer(num_classes=squeeze,
+            embed_dim=96,
+            img_size=img_size,
+            patch_size=2,
+            in_chans=1,
+            depths_enc=[2, 2, 2, 2],
+            num_heads_enc=[3, 6, 12, 12],
+            depths_dec=[2, 2, 2, 2],
+            num_heads_dec=[12, 12, 6, 3],
+            window_size=8, mlp_ratio=4.,
+            qkv_bias=True,
+            drop_rate=0.,
+            attn_drop_rate=0.,
+            drop_path_rate=0.1,
+            norm_layer=nn.LayerNorm,
+            ape=False,
+            patch_norm=True,
+            use_checkpoint=False,
+            pretrained_window_sizes=[0, 0, 0, 0])
+    #wnet = WNet.WNet(squeeze, in_chans=1)
     learning_rate = 0.003
     optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
     batch_size = 40
-    epochs = 6
-    num_workers = 0
+    epochs = 10
+    num_workers = 2  
     #---------------------------------------------
     # transform = transforms.Compose([transforms.Resize(img_size),
     #                             transforms.ToTensor()])
@@ -181,8 +207,8 @@ def main(prof):
     
     wnet = wnet.to(device)
 
-    with open("worker_profiling.txt", "a") as f:
-        f.write(f"\n batch_size={batch_size}\n")
+    #with open("worker_profiling.txt", "a") as f:
+     #   f.write(f"\n batch_size={batch_size}\n")
 
 
 
@@ -216,9 +242,9 @@ def main(prof):
         rec_losses_avg.append(torch.mean(torch.FloatTensor(rec_losses)))
         # print("--- %s seconds ---" % (time.time() - start_time))
 
-    print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
-    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-    print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
+    #print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
+    #print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+    #print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
 
     # images, labels = next(iter(dataloader))
 
