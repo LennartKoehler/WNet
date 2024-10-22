@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-from data import ReadDataset
 import numpy as np
 import torch
 import torch.nn as nn
@@ -7,25 +6,25 @@ import models.W_swintransformer as Wswin
 
 
 
+L = 8
+C = 2
+B = 3
+x = torch.arange(0, L*C*B).reshape((B, L, C))
+print(x)
+a = x[:,0::2,:]
+b = x[:,1::2,:]
+y = torch.cat([a,b],-1)
+y = y.view(B, -1, C*2)
+print(y)
 
-# x = torch.arange(0,10).reshape((10,1))
-# print(x)
-# a = x[0::2,:]
-# b = x[1::2,:]
-# y = torch.cat([a,b],-1)
-# y = y.view(-1, 2 * 1)
-# print(y)
-
-# z1 = y[:,0::2]
-# z2 = y[:,1::2]
-
-# z = torch.empty((10,1))
-# z[0::2,:] = z1
-# z[1::2,:] = z2
+z = torch.flatten(y, start_dim = 1, end_dim = 2)
+z = z.view(B, 2*y.shape[1], -1)
 
 
 
-# print(z)
+
+
+print(z)
 
 
 

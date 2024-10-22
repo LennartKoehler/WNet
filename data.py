@@ -86,7 +86,7 @@ class H5Dataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
 
         if self.dataset is None:
-            self.dataset = h5py.File(self.file_path, 'r')
+            self.dataset = h5py.File(self.file_path, 'r', swmr=True)
         signal = self.dataset[self.segment_names[index]][:]
 
         return torch.from_numpy(signal).float().unsqueeze(0)# unsqueeze: add channel axis
