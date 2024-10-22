@@ -330,7 +330,6 @@ class SwinTransformerBlock(nn.Module):
             x = shifted_x
 
         x = shortcut + self.drop_path(self.norm1(x))
-
         # FFN
         x = x + self.drop_path(self.norm2(self.mlp(x)))
 
@@ -423,7 +422,6 @@ class BasicLayer(nn.Module):
                 x = blk(x)
         if self.downsample is not None and self.downsample.operation_type == "downsample":
             x = self.downsample(x)
-
         return x
     
 
@@ -499,9 +497,8 @@ class PatchSeperating(nn.Module):
         """
         B, L, C = x.shape
 
-        z = torch.flatten(x, start_dim = 1, end_dim = 2)
-        z = z.view(B, 2*C, -1)
-
+        x = torch.flatten(x, start_dim = 1, end_dim = 2)
+        x = x.view(B, 2*L, -1)
         x = self.norm(x)
 
         return x
