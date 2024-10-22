@@ -82,7 +82,7 @@ def show_image(image):
 def main(prof):
     
     # Check if CUDA is available
-    device = torch.device("cuda:0")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("CUDA available: ",torch.cuda.is_available())
 
     # Create empty lists for average N_cut losses and reconstruction losses
@@ -131,7 +131,7 @@ def main(prof):
     # # Train 1 image set batch size=1 and set shuffle to False
     # dataloader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=True)
 
-    dataset = H5Dataset("/work/zo48kij/data_masters/data_segments_reduced.h5")
+    dataset = H5Dataset("data_segments_reduced.h5")
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
     
     wnet = wnet.to(device)
