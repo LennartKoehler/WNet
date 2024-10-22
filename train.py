@@ -95,7 +95,26 @@ def main(prof):
     #------------------Parameters-----------------
     squeeze = 10
     img_size = 256
-    wnet = WNet.WNet(squeeze, in_chans=1)
+    wnet = W_swintransformer.W_swintransformer(num_classes=squeeze,
+        embed_dim=96,
+        img_size=img_size,
+        patch_size=2,
+        in_chans=1,
+        depths_enc=[2, 2, 2],
+        num_heads_enc=[3, 6, 12],
+        depths_dec=[2, 2, 2],
+        num_heads_dec=[12, 6, 3],
+        window_size=8, mlp_ratio=4.,
+        qkv_bias=True,
+        drop_rate=0.,
+        attn_drop_rate=0.,
+        drop_path_rate=0.1,
+        norm_layer=nn.LayerNorm,
+        ape=False,
+        patch_norm=True,
+        use_checkpoint=False,
+        pretrained_window_sizes=[0, 0, 0])
+    #wnet = WNet.WNet(squeeze, in_chans=1)
     learning_rate = 0.003
     optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
     batch_size = 40
