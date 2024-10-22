@@ -490,7 +490,7 @@ class PatchSeperating(nn.Module):
         super().__init__()
         self.input_resolution = input_resolution
         self.dim = dim # dim = C
-        self.norm = norm_layer(dim)
+        self.norm = norm_layer(2*dim)
         self.operation_type = "upsample"
     def forward(self, x):
         """
@@ -500,7 +500,7 @@ class PatchSeperating(nn.Module):
         B, L, C = x.shape
 
         z = torch.flatten(x, start_dim = 1, end_dim = 2)
-        z = z.view(B, 2*C, -1)
+        z = z.view(B, 2*L, -1)
 
         x = self.norm(x)
 
