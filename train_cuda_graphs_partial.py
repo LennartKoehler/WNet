@@ -102,10 +102,10 @@ def main(prof):
             img_size=img_size,
             patch_size=2,
             in_chans=1,
-            depths_enc=[2, 2, 2, 2],
-            num_heads_enc=[3, 6, 12, 12],
-            depths_dec=[2, 2, 2, 2],
-            num_heads_dec=[12, 12, 6, 3],
+            depths_enc=[2, 2, 2],
+            num_heads_enc=[3, 6, 12],
+            depths_dec=[2, 2, 2],
+            num_heads_dec=[12, 12, 6],
             window_size=8, mlp_ratio=4.,
             qkv_bias=True,
             drop_rate=0.,
@@ -115,10 +115,12 @@ def main(prof):
             ape=False,
             patch_norm=True,
             use_checkpoint=False,
-            pretrained_window_sizes=[0, 0, 0, 0])
+            pretrained_window_sizes=[0, 0, 0])
     # wnet = WNet.WNet(squeeze, in_chans=1)
     learning_rate = 0.003
-    optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
+    optimizer_enc = torch.optim.SGD(enc.parameters(), lr=learning_rate)
+    optimizer_dec = torch.optim.SGD(dec.parameters(), lr=learning_rate)
+
     batch_size = 40
     epochs = 7
     num_workers = 2  
@@ -136,8 +138,8 @@ def main(prof):
     
     enc.to(device)
     dec.to(device)
-    enc = torch.cuda.make_graphed_callables(enc, (next(iter(dataloader)).to(device),), allow_unused_input=True)
-    dec = torch.cuda.make_graphed_callables(dec, (next(iter(dataloader)).to(device),), allow_unused_input=True)
+    # enc = torch.cuda.make_graphed_callables(enc, (next(iter(dataloader)).to(device),), allow_unused_input=True)
+    # dec = torch.cuda.make_graphed_callables(dec, (next(iter(dataloader)).to(device),), allow_unused_input=True)
 
 
     #with open("worker_profiling.txt", "a") as f:
@@ -160,26 +162,29 @@ def main(prof):
 
         for (idx, batch) in enumerate(dataloader):
             batch = batch.to(device)
-            enc = enc(batch)
-            n_cut_loss=soft_n_cut_loss(input,  softmax(enc),  img_size)
-            n_cut_loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-            # n_cut_loss = torch.tensor(1)
 
-            enc = enc(batch)
-            enc_ = enc_to_dec_func(enc)
-            dec = dec(enc_)
-            
-            rec_loss=reconstruction_loss(input, dec)
+            enc_batch = enc(batch)
+            n_cut_loss=soft_n_cut_loss(batch,  softmax(enc_batch),  img_size)
+            n_cut_loss.backward()
+            optimizer_enc.step()
+            optimizer_enc.zero_grad()
+
+            enc_batch = enc(batch)
+
+            enc_batch_ = enc_to_dec_func(enc_batch)
+            dec_batch = dec(enc_batch_)
+
+            rec_loss=reconstruction_loss(batch, dec_batch)
             rec_loss.backward()
-            optimizer.step()
-            optimizer.zero_grad() 
+
+            optimizer_enc.step()
+            optimizer_enc.zero_grad()
+            optimizer_dec.step()
+            optimizer_dec.zero_grad()
+
             n_cut_losses.append(n_cut_loss.detach())
             rec_losses.append(rec_loss.detach())
-            # if idx%10==0:
-            #     print(f"n_cut_loss: {n_cut_loss.item()}")
-            #     print(f"rec_loss: {rec_loss.item()} \n")
+ 
             prof.step()
 
 
