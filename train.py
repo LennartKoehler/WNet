@@ -116,11 +116,11 @@ def main(prof):
             patch_norm=True,
             use_checkpoint=False,
             pretrained_window_sizes=[0, 0, 0, 0])
-    #wnet = WNet.WNet(squeeze, in_chans=1)
+    # wnet = WNet.WNet(squeeze, in_chans=1)
     learning_rate = 0.003
     optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
     batch_size = 40
-    epochs = 10
+    epochs = 7
     num_workers = 2  
     #---------------------------------------------
     # transform = transforms.Compose([transforms.Resize(img_size),
@@ -131,10 +131,11 @@ def main(prof):
     # # Train 1 image set batch size=1 and set shuffle to False
     # dataloader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=True)
 
-    dataset = H5Dataset("data_segments_reduced.h5")
+    dataset = H5Dataset("/work/zo48kij/data_masters/data_segments_reduced.h5")
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
     
     wnet = wnet.to(device)
+    torch.compile(wnet, "reduce-overhead")
 
     #with open("worker_profiling.txt", "a") as f:
      #   f.write(f"\n batch_size={batch_size}\n")
@@ -188,15 +189,16 @@ def main(prof):
     # print("Done")
 
 if __name__ == '__main__':
-    with torch.profiler.profile(
-        schedule=torch.profiler.schedule(wait=1, warmup=1, active=5, repeat=1),
+    prof = torch.profiler.profile(
+        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
         on_trace_ready=torch.profiler.tensorboard_trace_handler('profiling'),
         record_shapes=True,
         profile_memory=True,
-        with_stack=True
-    ) as prof:
-        main(prof)
-
+        with_stack=True)
+    prof.start()
+    main(prof)
+    prof.stop()
+    print("finished")
 
 
 # python .\train.py --e 100 --input_folder="data/images/" --output_folder="/output/"

@@ -488,7 +488,7 @@ class PatchSeperating(nn.Module):
         super().__init__()
         self.input_resolution = input_resolution
         self.dim = dim # dim = C
-        self.norm = norm_layer(2*dim)
+        self.norm = norm_layer(dim)
         self.operation_type = "upsample"
     def forward(self, x):
         """
