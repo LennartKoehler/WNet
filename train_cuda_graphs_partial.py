@@ -20,7 +20,7 @@ from data import H5Dataset
 #import WNet_attention as WNet
 import models.WNet as WNet
 import matplotlib.pyplot as plt
-import models.W_swintransformer as W_swintransformer
+import models.W_swintransformer_seperate as W_swintransformer
 from local_variables import data_path
 
 parser = argparse.ArgumentParser(description='PyTorch Unsupervised Segmentation with WNet')
@@ -97,7 +97,7 @@ def main(prof):
     img_size = 256
 
 
-    wnet = W_swintransformer.W_swintransformer(num_classes=squeeze,
+    enc, dec, enc_to_dec_func = W_swintransformer.init_W_swintransformer(num_classes=squeeze,
             embed_dim=96,
             img_size=img_size,
             patch_size=2,
@@ -134,8 +134,11 @@ def main(prof):
     dataset = H5Dataset(data_path)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
     
-    wnet = wnet.to(device)
-    # torch.compile(model=wnet, mode="reduce-overhead")
+    enc.to(device)
+    dec.to(device)
+    enc = torch.cuda.make_graphed_callables(enc, (next(iter(dataloader)).to(device),), allow_unused_input=True)
+    dec = torch.cuda.make_graphed_callables(dec, (next(iter(dataloader)).to(device),), allow_unused_input=True)
+
 
     #with open("worker_profiling.txt", "a") as f:
      #   f.write(f"\n batch_size={batch_size}\n")
@@ -145,9 +148,9 @@ def main(prof):
     for epoch in range(epochs):
 
         # At 1000 epochs divide SGD learning rate by 10
-        if (epoch > 0 and epoch % 1000 == 0):
-            learning_rate = learning_rate/10
-            optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
+        # if (epoch > 0 and epoch % 1000 == 0):
+        #     learning_rate = learning_rate/10
+        #     optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
 
         print("Epoch = " + str(epoch))
 
@@ -157,7 +160,21 @@ def main(prof):
 
         for (idx, batch) in enumerate(dataloader):
             batch = batch.to(device)
-            wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, batch, 1, img_size)
+            enc = enc(batch)
+            n_cut_loss=soft_n_cut_loss(input,  softmax(enc),  img_size)
+            n_cut_loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+            # n_cut_loss = torch.tensor(1)
+
+            enc = enc(batch)
+            enc_ = enc_to_dec_func(enc)
+            dec = dec(enc_)
+            
+            rec_loss=reconstruction_loss(input, dec)
+            rec_loss.backward()
+            optimizer.step()
+            optimizer.zero_grad() 
             n_cut_losses.append(n_cut_loss.detach())
             rec_losses.append(rec_loss.detach())
             # if idx%10==0:
@@ -191,7 +208,7 @@ def main(prof):
 if __name__ == '__main__':
     prof = torch.profiler.profile(
         schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('profiling', worker_name="default"),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler('profiling', "cuda_graphs_partial"),
         record_shapes=True,
         profile_memory=True,
         with_stack=True)

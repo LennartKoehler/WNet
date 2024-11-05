@@ -21,7 +21,7 @@ from data import H5Dataset
 import models.WNet as WNet
 import matplotlib.pyplot as plt
 import models.W_swintransformer as W_swintransformer
-
+from local_variables import data_path
 
 
 
@@ -101,7 +101,7 @@ def main(prof):
     # # Train 1 image set batch size=1 and set shuffle to False
     # dataloader = torch.utils.data.DataLoader(dataset, batch_size=10, shuffle=True)
 
-    dataset = H5Dataset("data_segments_reduced.h5")
+    dataset = H5Dataset(data_path)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
     
     wnet = wnet.to(device)
@@ -110,7 +110,7 @@ def main(prof):
     #     f.write(f"\n batch_size={batch_size}\n")
 
 
-    static_input = torch.randn(batch_size, in_channels, img_size).to(device)
+    static_input = dataloader[0].to(device)
 
     #------------warmup----------------
     s = torch.cuda.Stream()
@@ -158,7 +158,7 @@ def main(prof):
 if __name__ == '__main__':
     with torch.profiler.profile(
         schedule=torch.profiler.schedule(wait=1, warmup=1, active=5, repeat=1),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('profiling'),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler('profiling', worker_name="cuda_graphs_full"),
         record_shapes=True,
         profile_memory=True,
         with_stack=True
