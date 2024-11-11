@@ -7,6 +7,19 @@ import numpy as np
 class UncompatibleInputException(Exception):
     pass
 
+class connection(nn.Module):
+    def __init__(self, middle_dim, embed_dim):
+        super().__init__()
+
+        self.match_channels = nn.Linear(middle_dim, embed_dim, bias = False)
+
+    def forward(self, enc):
+        enc_ = F.softmax(enc,1) # softmax necessary?
+        enc_ = enc_.transpose(1,2)
+        enc_ = self.match_channels(enc_)
+        enc_ = enc_.transpose(1,2) # have to transpose back and forth to fit the dimensionality of nn.Linear
+        return enc_
+
 def init_W_swintransformer(num_classes=100,
         embed_dim=96,
         img_size=256,
@@ -59,7 +72,6 @@ def init_W_swintransformer(num_classes=100,
     middle_dim = enc.out_channels
     middle_resolution = enc.out_resolution
 
-    match_channels = nn.Linear(middle_dim, embed_dim, bias = False)
 
 
     dec = U_swintransformer(img_size=middle_resolution,
@@ -86,12 +98,8 @@ def init_W_swintransformer(num_classes=100,
     out_dim = dec.out_channels
     out_resolution = dec.out_resolution
 
-    def enc_to_dec(enc):
-        enc_ = F.softmax(enc,1) # softmax necessary?
-        enc_ = enc_.transpose(1,2)
-        enc_ = match_channels(enc_)
-        enc_ = enc_.transpose(1,2) # have to transpose back and forth to fit the dimensionality of nn.Linear
-        return enc_
+    enc_to_dec = connection(middle_dim, embed_dim)
+
     return enc, dec, enc_to_dec
 
         

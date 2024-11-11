@@ -5,5 +5,6 @@ venv
 data/*
 data_segments.h5
 local_variables.py
-models/__pycache__/** */
+models/__pycache__/
 profiling/
+trained_models/

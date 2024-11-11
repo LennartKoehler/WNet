@@ -79,7 +79,7 @@ def show_image(image):
 
 
 
-def main(prof):
+def main(save_name):
     
     # Check if CUDA is available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -93,7 +93,7 @@ def main(prof):
     # squeeze = args.squeeze
 
     #------------------Parameters-----------------
-    squeeze = 10
+    squeeze = 20
     img_size = 256
 
 
@@ -119,8 +119,8 @@ def main(prof):
     # wnet = WNet.WNet(squeeze, in_chans=1)
     learning_rate = 0.003
     optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
-    batch_size = 40
-    epochs = 7
+    batch_size = 50
+    epochs = 2
     num_workers = 2  
     #---------------------------------------------
     # transform = transforms.Compose([transforms.Resize(img_size),
@@ -153,52 +153,38 @@ def main(prof):
 
         n_cut_losses = []
         rec_losses = []
-        # start_time = time.time()
+        start_time = time.time()
 
         for (idx, batch) in enumerate(dataloader):
             batch = batch.to(device)
             wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, batch, 1, img_size)
             n_cut_losses.append(n_cut_loss.detach())
             rec_losses.append(rec_loss.detach())
-            # if idx%10==0:
-            #     print(f"n_cut_loss: {n_cut_loss.item()}")
-            #     print(f"rec_loss: {rec_loss.item()} \n")
-            prof.step()
 
 
         n_cut_losses_avg.append(torch.mean(torch.FloatTensor(n_cut_losses)))
         rec_losses_avg.append(torch.mean(torch.FloatTensor(rec_losses)))
-        # print("--- %s seconds ---" % (time.time() - start_time))
+        print("--- %s seconds ---" % (time.time() - start_time))
 
-    #print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
-    #print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-    #print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
 
-    # images, labels = next(iter(dataloader))
-
-    # # Run wnet with cuda if enabled
-    # if CUDA:
-    #     images = images.to(device)
-
-    # enc, dec = wnet(images)
     # with open("worker_profiling.txt", "a") as f:
     #     f.write(f"number_workers:{num_workers}, time: {time.time() - start_time}\n")
-    # torch.save(wnet.state_dict(), "models/model_" + "test_orig")
-    # np.save("models/n_cut_losses_" + "test_orig", n_cut_losses_avg)
-    # np.save("models/rec_losses_" + "test_orig", rec_losses_avg)
-    # print("Done")
+    torch.save(wnet.state_dict(), "trained_models/model_" + save_name + ".pkl")
+    
+    np.save("loss_results/n_cut_losses_" + save_name + ".npy", n_cut_losses_avg)
+    np.save("loss_results/rec_losses_" + save_name + ".npy", rec_losses_avg)
+
 
 if __name__ == '__main__':
-    prof = torch.profiler.profile(
-        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('profiling', worker_name="default"),
-        record_shapes=True,
-        profile_memory=True,
-        with_stack=True)
-    prof.start()
-    main(prof)
-    prof.stop()
+    # prof = torch.profiler.profile(
+    #     schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
+    #     on_trace_ready=torch.profiler.tensorboard_trace_handler('profiling', worker_name="default"),
+    #     record_shapes=True,
+    #     profile_memory=True,
+    #     with_stack=True)
+    #prof.start()
+    main("transformer_4_depths_1000_it")
+    #prof.stop()
     print("finished")
 
 
-# python .\train.py --e 100 --input_folder="data/images/" --output_folder="/output/"
