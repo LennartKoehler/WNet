@@ -3,8 +3,8 @@ import numpy as np
 import torch.nn as nn
 import models.W_swintransformer as Wswin
 
-data_rec_path = "loss_results/rec_losses_transformer_4_depths_200_it.npy"
-data_cut_path = "loss_results/n_cut_losses_transformer_4_depths_200_it.npy"
+data_rec_path = "loss_results/rec_losses_transformer_3_depths_1_batch_1000_epochs.npy"
+data_cut_path = "loss_results/n_cut_losses_transformer_3_depths_1_batch_1000_epochs.npy"
 
 data_rec = np.load(data_rec_path)
 data_cut = np.load(data_cut_path)
