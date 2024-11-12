@@ -118,7 +118,7 @@ def main(prof):
     learning_rate = 0.003
     optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
     batch_size = 40
-    epochs = 6
+    epochs = 2
     num_workers = 4
     #---------------------------------------------
     # transform = transforms.Compose([transforms.Resize(img_size),
@@ -183,7 +183,7 @@ def main(prof):
 
 if __name__ == '__main__':
     with torch.profiler.profile(
-        schedule=torch.profiler.schedule(wait=1, warmup=1, active=5, repeat=1),
+        # schedule=torch.profiler.schedule(wait=1, warmup=1, active=5, repeat=1),
         on_trace_ready=torch.profiler.tensorboard_trace_handler('profiling'),
         record_shapes=True,
         profile_memory=True,
