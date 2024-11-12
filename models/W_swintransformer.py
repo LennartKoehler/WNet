@@ -89,7 +89,7 @@ class W_swintransformer(nn.Module):
         self.out_dim = self.dec.out_channels
         self.out_resolution = self.dec.out_resolution
 
-    def forward(self, x, returns='both'):
+    def forward(self, x, returns='dec'):
         enc = self.enc(x)
         if returns == "enc":
             return enc

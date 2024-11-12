@@ -151,8 +151,8 @@ class U_swintransformer(nn.Module):
 
         #after the first there are skip connections
         for skip_connection, layer, skip_concat in zip(skip_connections[:-1][::-1], self.layers_decoder[1:], self.skip_concat[1:]):
-            #x = torch.cat([skip_connection, x],2)
-            #x = skip_concat(x) # B L 2C -> B L C
+            x = torch.cat([skip_connection, x],2)
+            x = skip_concat(x) # B L 2C -> B L C
             x = layer(x)
         x = self.norm_dec(x)
 

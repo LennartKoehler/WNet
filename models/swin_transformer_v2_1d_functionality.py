@@ -186,7 +186,8 @@ class WindowAttention(nn.Module):
         q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
         # cosine attention
         attn = (F.normalize(q, dim=-1) @ F.normalize(k, dim=-1).transpose(-2, -1)) 
-        logit_scale = torch.clamp(self.logit_scale, max=torch.log(torch.tensor(1. / 0.01, device=device))).exp()
+        # logit_scale = torch.clamp(self.logit_scale, max=torch.log(torch.tensor(1. / 0.01, device="cuda""))).exp() #TODO uncomment? doesnt work form stream capturing
+        logit_scale = torch.clamp(self.logit_scale, max=4.6).exp()
         attn = attn * logit_scale
 
         #positional embedding

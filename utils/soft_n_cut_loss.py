@@ -31,7 +31,7 @@ def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=1): # 
 
 
 
-    distances = torch.abs(torch.arange(1, kh + 1) - radius - 1)
+    distances = torch.abs(torch.arange(1, kh + 1) - radius - 1) # IMPORTANT creating new tensor here! watch out for CPU/GPU
     # distances: tensor([5, 4, 3, 2, 1, 0, 1, 2, 3, 4, 5])
     distance_weights = torch.exp(torch.div(-1*(distances), ox**2)) # exp(-||X(i)-X(j)||^2_2  /  sigma^2_X)
     if torch.cuda.is_available():
