@@ -9,12 +9,12 @@ from torchvision import datasets, transforms
 from utils.org_soft_n_cut_loss import batch_soft_n_cut_loss
 from utils.soft_n_cut_loss import soft_n_cut_loss
 
-from data import H5Dataset
+from data_fast5 import H5Dataset
 #import WNet_attention as WNet
 import models.WNet as WNet
 import matplotlib.pyplot as plt
 import models.W_swintransformer as W_swintransformer
-from local_variables import data_path
+from local_variables import data_path_rna004 as data_path
 
 import os
 abspath = os.path.abspath(__file__)
@@ -80,7 +80,7 @@ def train_single_image():
             pretrained_window_sizes=[0, 0, 0])
     
     learning_rate = 0.003
-    epochs = 1000
+    epochs = 5
 
     wnet = wnet.to(device)
     optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
@@ -106,10 +106,11 @@ def train_single_image():
 
 
     
-    np.save("loss_results/n_cut_losses_" + save_name + ".npy", n_cut_losses)
-    np.save("loss_results/rec_losses_" + save_name + ".npy", rec_losses)
+    np.save(f"{save_path}n_cut_losses.npy", n_cut_losses)
+    np.save(f"{save_path}rec_losses.npy", rec_losses)
+    torch.save(wnet.state_dict(), f"{save_path}model.pkl")
+
     print("--- %s seconds ---" % (time.time() - start_time))
-    torch.save(wnet.state_dict(), "trained_models/model_" + save_name + ".pkl")
 
 
 if __name__ == '__main__':
@@ -120,7 +121,12 @@ if __name__ == '__main__':
     #     profile_memory=True,
     #     with_stack=True)
     #prof.start()
-    save_name = "transformer_3_depths_1_batch_1000_epochs"
+    run_name = "transformer_3_depths_1_batch_5_epochs_test"
+    save_path = f"results/{run_name}/"
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+
     train_single_image()
     #prof.stop()
     print("finished")

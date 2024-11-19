@@ -6,5 +6,5 @@ data/*
 data_segments.h5
 local_variables.py
 models/__pycache__/
+results/
 profiling/
-trained_models/

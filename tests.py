@@ -5,17 +5,21 @@ Created on Mon Oct 15 20:36:27 2018
 @author: tao
 """
 
-import train
 import models.WNet as WNet
 import models.WNet_attention as WNet_attention
 import models.W_swintransformer as W_swintransformer
 import torch
 import numpy as np
-from data import H5Dataset
+from data_fast5 import H5Dataset_10
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import torch.nn as nn
-from local_variables import data_path
+import os
+from local_variables import data_path_rna004_2048 as data_path
+
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
 def EncoderTest(verbose=True):
     shape=(2, 4, 224, 224)
@@ -58,60 +62,72 @@ def AllTest():
     TrainTest()
     print('WNet Passed All Tests!')
 
-def test():
-    wnet = WNet.WNet(squeeze=2, in_chans=1)
-    # wnet = W_swintransformer.W_swintransformer(num_classes=2,
-    #         embed_dim=96,
-    #         img_size=256,
-    #         patch_size=2,
-    #         in_chans=1,
-    #         depths_enc=[2, 2, 2],
-    #         num_heads_enc=[3, 6, 12],
-    #         depths_dec=[2, 2, 2],
-    #         num_heads_dec=[12, 6, 3],
-    #         window_size=8, mlp_ratio=4.,
-    #         qkv_bias=True,
-    #         drop_rate=0.1,
-    #         attn_drop_rate=0.1,
-    #         drop_path_rate=0.1,
-    #         norm_layer=nn.LayerNorm,
-    #         ape=False,
-    #         patch_norm=True,
-    #         use_checkpoint=False,
-    #         pretrained_window_sizes=[0, 0, 0])
-    # wnet.load_state_dict(torch.load("trained_models/model_transformer_3_depths_1_batch_1000_epochs.pkl"))#, map_location=torch.device('cpu')))
-    wnet.load_state_dict(torch.load("trained_models/model_conv_1_batch_1000_epochs.pkl"))#, map_location=torch.device('cpu')))
+def test(wnet, batch):
 
-    for i in range(0,10,2):
+    enc, dec = wnet(batch, returns='both')
+    enc = torch.argmax(enc, dim=1, keepdim=False).detach().cpu().numpy()
+    dec = dec.detach().cpu().numpy()
+    batch = batch.detach().cpu().numpy()
 
-        data1 = H5Dataset(data_path)[i][None, :]
-        data2 = H5Dataset(data_path)[i+1][None, :]
-        data_batch = torch.cat((data1, data2), 0)
-        enc, dec = wnet(data_batch, returns='both')
-        enc = torch.argmax(enc, dim=1, keepdim=False).detach().numpy()
-        dec = dec.detach().numpy()
+    for i, single_image in enumerate(batch[:10]):
+        plot_segmentation(enc[i], single_image, i)
+        plot_reconstruction(dec[i], single_image, i)
 
-        plot_segmentation(enc, data_batch, i)
-        plot_reconstruction(dec, data_batch, i)
+def plot_segmentation(enc, single_image, i):
+    fig, ax = plt.subplots()
+    fig.set_figwidth(15)
 
-def plot_segmentation(enc, data_batch, i):
-    fig, ax = plt.subplots(4)
-    x = np.arange(0,len(enc[0,:]))
-    ax[0].plot(x, enc[0,:])
-    ax[1].plot(data_batch[0, 0,:].detach().numpy())
-    ax[2].plot(x, enc[1,:])
-    ax[3].plot(data_batch[1, 0,:].detach().numpy())
-    fig.savefig(f"test_images/test{i}_segmentation.png")
-
-def plot_reconstruction(dec, data_batch, i):
-    fig, ax = plt.subplots(4)
-    x = np.arange(0,len(dec[0, 0,:]))
-    ax[0].plot(x, dec[0, 0,:])
-    ax[1].plot(data_batch[0, 0,:].detach().numpy())
-    ax[2].plot(x, dec[1, 0,:])
-    ax[3].plot(data_batch[1, 0,:].detach().numpy())
-    fig.savefig(f"test_images/test{i}_reconstruction.png")
+    x = np.arange(0,len(enc[:]))
+    ax.plot(single_image[0,:])
+    ax.plot(x, enc[:], color="lime", linewidth=1)
 
 
-if __name__ == '__main__':
-    test()
+    fig.savefig(f"{save_path}test_{i}_segmentation.png", dpi=300)
+    plt.close()
+
+def plot_reconstruction(dec, single_image, i):
+    fig, ax = plt.subplots()
+    fig.set_figwidth(15)
+    x = np.arange(0,len(dec[0,:]))
+    ax.plot(single_image[0,:])
+    ax.plot(x, dec[0,:], color="red", linewidth=0.7)
+
+    fig.savefig(f"{save_path}test_{i}_reconstruction.png", dpi=300)
+
+def run_tests(wnet, run_id, batch):
+    global save_path
+    save_path = f"results/{run_id}/test_images/"
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    test(wnet, batch)
+
+if __name__ == "__main__":
+    run_id = "run_2024_11_18_T19_09_34"
+
+    wnet = W_swintransformer.W_swintransformer(num_classes=2,
+            embed_dim=96,
+            img_size=2560,
+            patch_size=2,
+            in_chans=1,
+            depths_enc=[2, 2, 2, 2],
+            num_heads_enc=[3, 6, 12, 12],
+            depths_dec=[2, 2, 2, 2],
+            num_heads_dec=[12, 12, 6, 3],
+            window_size=8, mlp_ratio=4.,
+            qkv_bias=True,
+            drop_rate=0.1,
+            attn_drop_rate=0.1,
+            drop_path_rate=0.1,
+            norm_layer=nn.LayerNorm,
+            ape=False,
+            patch_norm=True,
+            use_checkpoint=False,
+            pretrained_window_sizes=[0, 0, 0, 0])
+    
+    # wnet = WNet.WNet(squeeze=2, in_chans=1)
+
+    wnet.load_state_dict(torch.load(f"results/{run_id}/model.pkl", map_location=torch.device('cpu')))
+
+    dataset = H5Dataset_10(data_path)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=50, shuffle=True, num_workers=2, pin_memory=True)
+    run_tests(wnet, run_id, next(iter(dataloader)))

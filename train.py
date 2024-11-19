@@ -10,18 +10,22 @@ import argparse
 import torch.nn as nn
 import numpy as np
 import time
-import datetime
 import torch
 from torchvision import datasets, transforms
 from utils.org_soft_n_cut_loss import batch_soft_n_cut_loss
-from utils.soft_n_cut_loss import soft_n_cut_loss
+from utils.soft_n_cut_loss import soft_n_cut_loss_factory
 
-from data import H5Dataset
+from data_fast5 import H5Dataset
 #import WNet_attention as WNet
 import models.WNet as WNet
 import matplotlib.pyplot as plt
 import models.W_swintransformer as W_swintransformer
-from local_variables import data_path
+from local_variables import data_path_rna004_2048 as data_path
+
+from datetime import datetime
+from save_parameters import save_run_parameters
+from plot_loss import plot_loss
+from tests import run_tests
 
 import os
 abspath = os.path.abspath(__file__)
@@ -34,9 +38,9 @@ os.chdir(dname)
 softmax = nn.Softmax(dim=1)
 criterionIdt = torch.nn.MSELoss()
 
-def train_op(model, optimizer, input, k, img_size, psi=0.5): # model = WNet
+def train_op(model, optimizer, input, k, img_size, soft_n_cut_loss_func, psi=0.5): # model = WNet
     enc = model(input, returns='enc')
-    n_cut_loss=soft_n_cut_loss(input,  softmax(enc),  img_size)
+    n_cut_loss=soft_n_cut_loss_func(input,  softmax(enc),  img_size)
     n_cut_loss.backward()
     optimizer.step()
     optimizer.zero_grad()
@@ -59,7 +63,9 @@ def reconstruction_loss(x, x_prime):
 
 
 def main():
-    
+    start_time = time.time()
+    global parameters
+
     # Check if CUDA is available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("CUDA available: ",torch.cuda.is_available())
@@ -70,75 +76,103 @@ def main():
 
 
     #------------------Parameters-----------------
-    squeeze = 20
-    img_size = 256
-
-
-    wnet = W_swintransformer.W_swintransformer(num_classes=squeeze,
-            embed_dim=96,
-            img_size=img_size,
-            patch_size=2,
-            in_chans=1,
-            depths_enc=[2, 2, 2, 2],
-            num_heads_enc=[3, 6, 12, 12],
-            depths_dec=[2, 2, 2, 2],
-            num_heads_dec=[12, 12, 6, 3],
-            window_size=8, mlp_ratio=4.,
-            qkv_bias=True,
-            drop_rate=0.3,
-            attn_drop_rate=0.3,
-            drop_path_rate=0.1,
-            norm_layer=nn.LayerNorm,
-            ape=False,
-            patch_norm=True,
-            use_checkpoint=False,
-            pretrained_window_sizes=[0, 0, 0, 0])
-    # wnet = WNet.WNet(squeeze, in_chans=1)
+    squeeze = 2
+    img_size = 2048
     learning_rate = 0.003
-    optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
     batch_size = 50
-    epochs = 1000
+    epochs = 3
     num_workers = 2
+    soft_n_cut_loss_radius = 5  #default: 5
+    soft_n_cut_loss_oi = 1      #default: 1
+    soft_n_cut_loss_ox = 2      #default: 4
+
+    #---------------------------------------------
+    #-------------Loss Function-------------------
+    soft_n_cut_loss_func = soft_n_cut_loss_factory(soft_n_cut_loss_radius, soft_n_cut_loss_oi, soft_n_cut_loss_ox)
+
+    #-----------------Model-----------------------
+    
+    # wnet = W_swintransformer.W_swintransformer(num_classes=squeeze,
+    #         embed_dim=96,
+    #         img_size=img_size,
+    #         patch_size=2,
+    #         in_chans=1,
+    #         depths_enc=[2, 2, 2, 2],
+    #         num_heads_enc=[3, 6, 12, 12],
+    #         depths_dec=[2, 2, 2, 2],
+    #         num_heads_dec=[12, 12, 6, 3],
+    #         window_size=8, mlp_ratio=4.,
+    #         qkv_bias=True,
+    #         drop_rate=0.1,
+    #         attn_drop_rate=0.1,
+    #         drop_path_rate=0.1,
+    #         norm_layer=nn.LayerNorm,
+    #         ape=False,
+    #         patch_norm=True,
+    #         use_checkpoint=False,
+    #         pretrained_window_sizes=[0, 0, 0, 0])
+    wnet = WNet.WNet(squeeze, in_chans=1)
     #---------------------------------------------
 
-
+    optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
     dataset = H5Dataset(data_path)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=True)
     
     wnet = wnet.to(device)
 
 
+    parameters.update({
+        "data": data_path,
+        "model": type(wnet).__name__,
+        "dropout": 0.1,
+        "soft_n_cut_loss_radius": soft_n_cut_loss_radius,
+        "soft_n_cut_loss_oi": soft_n_cut_loss_oi,
+        "soft_n_cut_loss_ox": soft_n_cut_loss_ox,
+        "squeeze": squeeze,
+        "img_size": img_size,
+        "batch_size": batch_size,
+        "epochs": epochs,
+        "num_workers": num_workers,
+        "learning_rate_init": learning_rate
+    })
+
     for epoch in range(epochs):
 
         # At 1000 epochs divide SGD learning rate by 10
-        if (epoch > 0 and epoch % 1000 == 0):
+        if (epoch > 0 and epoch % 2 == 0):
             learning_rate = learning_rate/10
+            parameters[f"learning_rate_epoch_{epoch}"] = learning_rate
             optimizer = torch.optim.SGD(wnet.parameters(), lr=learning_rate)
 
         print("Epoch = " + str(epoch))
 
         n_cut_losses = []
         rec_losses = []
-        start_time = time.time()
+        epoch_start_time = time.time()
 
         for (idx, batch) in enumerate(dataloader):
             batch = batch.to(device)
-            wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, batch, 1, img_size)
+            wnet, n_cut_loss, rec_loss = train_op(wnet, optimizer, batch, 1, img_size, soft_n_cut_loss_func)
             n_cut_losses.append(n_cut_loss.detach())
             rec_losses.append(rec_loss.detach())
 
 
         n_cut_losses_avg.append(torch.mean(torch.FloatTensor(n_cut_losses)))
         rec_losses_avg.append(torch.mean(torch.FloatTensor(rec_losses)))
-        print("--- %s seconds ---" % (time.time() - start_time))
+        epoch_time = time.time() - epoch_start_time
+        print("--- %s seconds ---" % (epoch_time))
 
 
 
-    torch.save(wnet.state_dict(), "trained_models/model_" + save_name + ".pkl")
-    
-    np.save("loss_results/n_cut_losses_" + save_name + ".npy", n_cut_losses_avg)
-    np.save("loss_results/rec_losses_" + save_name + ".npy", rec_losses_avg)
+    np.save(f"{save_path}n_cut_losses.npy", n_cut_losses_avg)
+    np.save(f"{save_path}rec_losses.npy", rec_losses_avg)
+    torch.save(wnet.state_dict(), f"{save_path}model.pkl")
+    duration = time.time() - start_time
+    parameters["duration"] = f"{duration:.0f} seconds"
+    parameters["epoch_time"] = f"{epoch_time:.0f} seconds"
 
+    print("--- %s seconds ---" % duration)
+    return wnet, parameters, batch
 
 if __name__ == '__main__':
     # prof = torch.profiler.profile(
@@ -148,9 +182,25 @@ if __name__ == '__main__':
     #     profile_memory=True,
     #     with_stack=True)
     #prof.start()
-    save_name = "transformer_4_depths_1000_it"
-    main()
+
+
+    run_id = f"run_{str(datetime.now().strftime("%Y_%m_%d_T%H_%M_%S"))}"
+    # run_id = "transformer_4_depths_rna_004_6_epochs_01_dropout_2_squeeze_2560_input_size_decreasing_learning_rate"
+    save_path = f"results/{run_id}/"
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    parameters = {"run_id": run_id}
+
+    wnet, parameters, batch = main()
+
+
+    parameters["comment"] = "testing new data"
+
+    save_run_parameters(parameters, save_path)
+    plot_loss(run_id)
+    run_tests(wnet, run_id, batch)
+
     #prof.stop()
-    print("finished")
+    print(f"Finished run {run_id}")
 
 

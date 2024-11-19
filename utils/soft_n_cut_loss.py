@@ -14,7 +14,7 @@ from matplotlib.ticker import LinearLocator
 
 
 
-def calculate_weights(batch, batch_size, img_size=256, ox=4, radius=5 ,oi=1): # maybe save the weights for images to then reuse?
+def calculate_weights(batch, batch_size, img_size=256, radius=5, oi=1 ,ox=4): # maybe save the weights for images to then reuse?
     image = torch.mean(batch, dim=1, keepdim=True) # mean over channels which is 1? -> does nothing?
 
     image = F.pad(input=image, pad=(radius, radius), mode='constant', value=0) # pad around image to not reduce size
@@ -135,27 +135,38 @@ def soft_n_cut_loss_single_k(weights, enc, batch_size, img_size, radius=5):
     # plt.show()
     return result
 
-
-def soft_n_cut_loss(batch, enc, img_size):
-    loss = []
-    batch_size = batch.shape[0]
-    k = enc.shape[1]
-    weights = calculate_weights(batch, batch_size, img_size)
-    for i in range(0, k):
-        loss.append(soft_n_cut_loss_single_k(weights, enc[:, (i,), :], batch_size, img_size))
-    losses_of_all_classes = torch.stack(loss)
-    sum_over_classes = torch.sum(losses_of_all_classes, dim=0)
-    mean_over_batches = torch.mean(k - sum_over_classes)
-    return mean_over_batches
+def soft_n_cut_loss_factory(radius=5, oi=1, ox=4):
+    def soft_n_cut_loss(batch, enc, img_size):
+        loss = []
+        batch_size = batch.shape[0]
+        k = enc.shape[1]
+        weights = calculate_weights(batch, batch_size, img_size, radius=radius, oi=oi, ox=ox)
+        for i in range(0, k):
+            loss.append(soft_n_cut_loss_single_k(weights, enc[:, (i,), :], batch_size, img_size, radius=radius))
+        losses_of_all_classes = torch.stack(loss)
+        sum_over_classes = torch.sum(losses_of_all_classes, dim=0)
+        mean_over_batches = torch.mean(k - sum_over_classes)
+        return mean_over_batches
+    return soft_n_cut_loss
 
 
 def test2():
-    original = torch.tensor([[[255.0,255.0,255.0,255.0,255.0,0.0,0.0,0.0,0.0,0.0]]]).float()
-    channel1 = torch.tensor([[[10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0]]]).float()
-    enc = torch.nn.Softmax(dim=1)(torch.cat((channel1, -1*channel1), dim = 1))
-    plt.plot(enc[0,0,:], label="raw class")
-    plt.plot(enc[0,1,:], label="raw class")
-    print(soft_n_cut_loss(original, enc, 10))
+    original = torch.tensor([[[255.0,255.0,255.0,255.0,255.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,255.0,255.0,255.0,255.0]]]).float()
+    channel_double = torch.tensor([[[10.0,10.0,10.0,10.0,10.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,10.0,10.0,10.0,10.0]]]).float()
+
+    enc = torch.nn.Softmax(dim=1)(torch.cat((channel_double, -channel_double), dim = 1))
+
+
+    # channel1 = torch.tensor([[[10.0,10.0,10.0,10.0,10.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]]]).float()
+    # channel2 = torch.tensor([[[0.0,0.0,0.0,0.0,0.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,10.0,0.0,0.0 ,0.0,0.0]]]).float()
+    # channel3 = torch.tensor([[[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,10.0,10.0,10.0,10.0]]]).float()
+    # enc = torch.nn.Softmax(dim=1)(torch.cat((channel1, channel2, channel3), dim = 1))
+
+    # plt.plot(enc[0,0,:], label="raw class")
+    # plt.plot(enc[0,1,:], label="raw class")
+    #print(soft_n_cut_loss(original, enc, 10))
+
+
 def plot_function(tensor):
     tensor = tensor.detach().numpy()
     tensor = tensor[:,:,90:120,:] # show only part of signal
@@ -194,3 +205,6 @@ def test():
 #         [[2.2257e-01, 1.0000e+00, 0.0000e+00]],
 
 #         [[0.0000e+00, 1.0000e+00, 0.0000e+00]]])
+
+if __name__ == "__main__":
+    test2()
